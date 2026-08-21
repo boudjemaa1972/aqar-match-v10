@@ -1,71 +1,88 @@
 import { NextResponse } from "next/server";
 import { execSync } from "child_process";
+import path from "path";
 
 // GET /api/setup
 // One-time endpoint: creates all tables in the database using prisma db push.
 // After running once, this endpoint can be disabled or removed.
 //
 // Usage: visit https://your-site.netlify.app/api/setup
-// Returns: { ok: true, message: "..." } or { ok: false, error: "..." }
 
 export async function GET() {
-  // ── Security: only allow in production and only once ──────────
   if (!process.env.DATABASE_URL) {
     return NextResponse.json(
-      { ok: false, error: "DATABASE_URL غير مُعرّف في بيئة الخادم." },
-      { status: 500 },
-    );
-  }
-
-  if (!process.env.ENCRYPTION_PASSPHRASE || !process.env.ENCRYPTION_KEY_SALT) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          "ENCRYPTION_PASSPHRASE أو ENCRYPTION_KEY_SALT غير مُعرّفين.",
-      },
+      { ok: false, error: "DATABASE_URL غير مُعرّف." },
       { status: 500 },
     );
   }
 
   try {
-    console.log("[setup] Starting prisma db push...");
+    // Step 1: Try connecting and counting users (fast check)
+    const { db } = await import("@/lib/db");
+    let userCount: number;
+    try {
+      userCount = await db.user.count();
+    } catch {
+      // Tables don't exist yet — proceed to create them
+      userCount = -1;
+    }
 
-    // Run prisma db push to sync schema to the database
+    if (userCount >= 0) {
+      return NextResponse.json({
+        ok: true,
+        message: "الجداول موجودة بالفعل!",
+        userCount,
+      });
+    }
+
+    // Step 2: Tables don't exist — use prisma db push via direct binary path
+    console.log("[setup] Tables not found, running prisma db push...");
+    const prismaBin = path.join(
+      process.cwd(),
+      "node_modules",
+      ".bin",
+      "prisma",
+    );
+    const schemaPath = path.join(
+      process.cwd(),
+      "prisma",
+      "schema.prisma",
+    );
+
     const output = execSync(
-      "npx prisma db push --skip-generate --accept-data-loss --schema=prisma/schema.prisma",
+      `"${prismaBin}" db push --skip-generate --accept-data-loss --schema="${schemaPath}"`,
       {
         encoding: "utf-8",
-        timeout: 60_000, // 60 seconds max
-        env: {
-          ...process.env,
-          DATABASE_URL: process.env.DATABASE_URL,
-        },
+        timeout: 60_000,
+        env: { ...process.env },
       },
     );
 
-    console.log("[setup] prisma db push completed successfully");
+    console.log("[setup] prisma db push completed");
 
-    // Verify by counting users (quick DB connection test)
-    const { db } = await import("@/lib/db");
-    const userCount = await db.user.count();
-
+    // Step 3: Verify
+    userCount = await db.user.count();
     return NextResponse.json({
       ok: true,
-      message: "تم إنشاء/تحديث الجداول بنجاح!",
+      message: "تم إنشاء الجداول بنجاح!",
       userCount,
-      details: output.slice(-500), // last 500 chars of prisma output
+      details: output.slice(-300),
     });
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : String(e);
     console.error("[setup] Failed:", errMsg);
 
+    let userMessage = "فشل إنشاء الجداول.";
+    if (errMsg.includes("DATABASE_URL") || errMsg.includes("P1001")) {
+      userMessage = "تعذّر الاتصال بقاعدة DATABASE_URL. تأكد من صحته.";
+    } else if (errMsg.includes("ENOSPC") || errMsg.includes("disk")) {
+      userMessage = "مساحة القرص ممتلئة على الخادم.";
+    } else if (errMsg.includes("ETIMEOUT") || errMsg.includes("ECONNREFUSED")) {
+      userMessage = "انتهت مهلة الاتصال بقاعدة البيانات.";
+    }
+
     return NextResponse.json(
-      {
-        ok: false,
-        error: "فشل إنشاء الجداول.",
-        details: errMsg.slice(0, 500),
-      },
+      { ok: false, error: userMessage, details: errMsg.slice(0, 500) },
       { status: 500 },
     );
   }
