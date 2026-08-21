@@ -1,0 +1,980 @@
+// ===================================================================
+// Aqar Match — Blind-Matching Real Estate Platform (Algeria)
+// Prisma Schema
+//
+// Security model:
+//   • secretMinPriceEnc is AES-256-GCM encrypted at the app layer.
+//   • secretMinPrice is NEVER returned in any API response that goes
+//     to a buyer — it is only decrypted inside matching-engine.ts
+//     for the stage-2 budget filter, and inside seller-side endpoints
+//     so the seller can see their OWN reserve price.
+//   • askingPrice is public from the first moment (blind card).
+//   • Contact/location decryption happens only after both parties
+//     have paid their fees and consented (status=BUYER_FEE_PAID).
+//
+// Match lifecycle (seller-first fee model):
+//   PROPOSED → SELLER_FEE_PAID → BUYER_NOTIFIED → BUYER_FEE_PAID → (ACCEPTED)
+//   ↓ (48h timeout at any pending step)        ↓ (48h post-buyer-pay, no seller confirm)
+//   EXPIRED (advance queue)                    REFUNDED (buyer fee back, advance queue)
+// ===================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // SQLite for local dev — switch to "postgresql" for production
+  // (see netlify.toml for the production env vars).
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users ──────────────────────────────────────────────────────────
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  phoneEnc      String
+  nameEnc       String
+  role          Role     @default(BUYER)
+  accountType   AccountType @default(INDIVIDUAL)
+  verified      Boolean  @default(false)
+
+  // ── National ID Number (NIN — رقم التعريف الوطني) ──────────
+  // Required for all users. Encrypted with AES-256-GCM (same scheme
+  // as phoneEnc/nameEnc). 18-digit Algerian NIN (XXXXXXXXXXXXXXXXXX).
+  // Never returned in API responses — only stored for compliance.
+  ninEnc        String   @default("") // empty for pre-existing users; required on signup
+
+  // ── Email + Password auth (Phase 2 — added 2026-08) ──────────
+  // passwordHash is null for phone-only accounts (OTP). When set,
+  // the user can sign in via /api/auth/login (email + password).
+  // Stored using argon2id (memory-hard KDF) — never plaintext,
+  // never SHA-* alone, never MD5.
+  passwordHash  String?
+  // emailVerifiedAt is null until the user clicks the email
+  // verification link OR enters the email OTP. Phone-only users
+  // (legacy + phone-signup) stay null forever — they don't need it.
+  emailVerifiedAt DateTime?
+  // phoneVerifiedAt mirrors the legacy `verified` boolean but with
+  // a timestamp for audit. Set when OTP succeeds.
+  phoneVerifiedAt DateTime?
+
+  // ── Brute-force protection ────────────────────────────────────
+  // loginAttempts increments on every failed password attempt.
+  // At 5 failures, lockedUntil is set to (now + 15 min), and
+  // subsequent logins are rejected with 423 Locked until that time.
+  // Resets to 0 on successful login.
+  loginAttempts Int      @default(0)
+  lockedUntil   DateTime?
+  lastLoginAt   DateTime?
+  lastLoginIp   String?  // for audit log + anomaly detection
+
+  // ── Account Category (3-tier business model) ──────────────────
+  // INDIVIDUAL  → pay-per-deal fixed fee (current model)
+  // AGENCY      → subscription-based, no per-deal fee
+  // DEVELOPER   → commission-based, NO contact reveal ever,
+  //               communication only via internal chat + scheduled viewing
+  accountCategory    AccountCategory @default(INDIVIDUAL)
+  agencyRegistryNumber   String?  // required if AGENCY (Algerian trade register)
+  developerLicenseNumber String?  // required if DEVELOPER (real-estate developer license)
+  categoryVerified  Boolean @default(false) // true only after manual admin verification
+  categoryVerifiedAt DateTime?
+  categoryVerifiedBy String?  // admin user id (audit trail)
+
+  // sessionToken stored in httpOnly cookie — remains the technical
+  // basis for any future auth system. Rotated on every login to
+  // prevent session fixation.
+  sessionToken  String   @unique @default(cuid())
+  isGuest       Boolean  @default(true) // true until OTP- or email-verified
+  systemRole    SystemRole @default(USER) // USER or ADMIN — admin can access /admin
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  listings      Listing[]
+  requests      MatchRequest[]
+  matches       Match[]      @relation("BuyerMatches")
+  offers        Match[]      @relation("SellerMatches")
+  rejections    MatchRejection[]
+  weightProfile UserWeightProfile?
+  reviews       Review[]
+  otpCodes      OtpCode[]
+  passwordResets PasswordReset[]
+  emailVerifications EmailVerification[]
+  auditLogs     AuditLog[]  // user is the actor
+  agencySubscription AgencySubscription?
+  developerPartnership DeveloperPartnership?
+  sentMessages      Message[]
+  conversations     Conversation[] @relation("ConversationParticipants")
+  viewingsAsRep     Viewing[]
+  notifications     MatchNotification[]
+}
+
+enum AccountCategory {
+  INDIVIDUAL
+  AGENCY
+  DEVELOPER
+}
+
+enum SystemRole {
+  USER
+  ADMIN
+}
+
+// ─── Password Reset Tokens (email-based recovery) ─────────────────
+// Single-use, short-lived (15 min) tokens for password reset.
+// Stored as SHA-256 hash (not plaintext) — tokens are 32 bytes of
+// entropy, so even a DB leak doesn't reveal usable tokens.
+// Marked usedAt when consumed, then deleted by a cron (TBD).
+model PasswordReset {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String   @unique // SHA-256 of the random token
+  expiresAt   DateTime // 15 min from creation
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+  // Audit: who requested it (IP + user agent)
+  requestedIp String?
+  requestedUa String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ─── Email Verification Tokens (confirm email ownership) ──────────
+// Created at signup. The user must click the link (or enter the 6-digit
+// OTP) to set emailVerifiedAt. Single-use, 24h expiry.
+model EmailVerification {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String   @unique // SHA-256 of the random token
+  // 6-digit code for users who prefer OTP over clicking a link.
+  codeHash    String   // PBKDF2 of 6-digit code (same as OtpCode)
+  expiresAt   DateTime // 24h for email verification (longer than phone OTP)
+  consumed    Boolean  @default(false)
+  attempts    Int      @default(0) // brute-force counter on the 6-digit code
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ─── Audit Log (security + compliance) ─────────────────────────────
+// Records every auth event (signup, login, logout, password reset,
+// OTP issue, failed login, account lockout, etc.) for:
+//   • security investigation (was account X compromised?)
+//   • compliance (PCI-DSS, GDPR access logs)
+//   • anomaly detection (sudden burst of logins from a new IP)
+//
+// PII: we store the userId (cuid) + IP, but NEVER the password,
+// OTP code, or session token. The event field is an enum so it can
+// be filtered efficiently.
+//
+// RETENTION: 90 days default, then purged by a cron. Adjust via
+// environment variable AUDIT_LOG_RETENTION_DAYS in production.
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?  // null for events before user is identified (e.g., failed login with wrong email)
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  event       AuditEvent
+  // Success/failure — used by dashboards to spot attack patterns
+  success     Boolean  @default(true)
+  // IP + user agent for forensic analysis
+  ip          String?
+  userAgent   String?
+  // Optional context (e.g., "phone=+2135**", "email=u@ex**") —
+  // masked to avoid storing raw PII in audit logs.
+  metadata    String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([event])
+  @@index([createdAt])
+  @@index([ip])
+}
+
+enum AuditEvent {
+  SIGNUP_EMAIL
+  SIGNUP_PHONE
+  LOGIN_EMAIL
+  LOGIN_PHONE
+  LOGIN_FAILED
+  LOGOUT
+  PASSWORD_RESET_REQUESTED
+  PASSWORD_RESET_USED
+  EMAIL_VERIFIED
+  PHONE_VERIFIED
+  ACCOUNT_LOCKED
+  SESSION_ROTATED
+}
+
+// ─── OTP Auth (Phase 1) ────────────────────────────────────────────
+// Stores hashed OTP codes for phone-based authentication.
+// NEVER stored in plaintext — hashed with PBKDF2-SHA256 (10k iters,
+// lower than data encryption because OTP is short-lived & 6 digits).
+model OtpCode {
+  id            String   @id @default(cuid())
+  phoneHash     String   // SHA-256 of normalized E.164 phone number
+  codeHash      String   // PBKDF2 of the 6-digit code
+  attempts      Int      @default(0) // counter for verification attempts
+  consumed      Boolean  @default(false)
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String?
+
+  @@index([phoneHash])
+  @@index([expiresAt])
+}
+
+enum Role {
+  BUYER
+  SELLER
+  LANDLORD
+  TENANT
+  AGENT
+}
+
+enum AccountType {
+  INDIVIDUAL
+  AGENCY
+  BROKER
+}
+
+// ─── Property Listings ─────────────────────────────────────────────
+model Listing {
+  id            String        @id @default(cuid())
+  ownerId       String
+  owner         User          @relation(fields: [ownerId], references: [id])
+
+  intent        PropertyIntent
+  type          PropertyType
+  city          String
+  commune       String?
+  district      String?
+  askingPrice   Int             // PUBLIC — visible on blind card from the start (DZD)
+  areaSqm       Int
+  bedrooms      Int?
+  bathrooms     Int?
+  floor         Int?
+  facades       Int?
+  // ── Feature completeness for future Hedonic Pricing Model ──
+  // These structured fields replace free-text features for statistical analysis.
+  buildingAge   Int?            // years since construction (optional — may not be known)
+  hasElevator   Boolean @default(false)
+  hasParking    Boolean @default(false)
+  // For SEASONAL_RENT: which season the listing targets (affects price heavily)
+  seasonalSeason Season?        // null for SELL/RENT
+  legalStatus        LegalStatus?
+  urbanPermitStatus  UrbanPermitStatus?   // عقود التعمير — null for AGRICULTURAL_LAND
+  offerTitle         String
+  description   String?
+  features      String         @default("[]")  // legacy free-text array, kept for display
+  accountType   AccountType    @default(INDIVIDUAL)
+
+  // SECRET — AES-256-GCM encrypted. NEVER returned to buyers.
+  // Decrypted only inside matching-engine.ts (stage-2 filter) and
+  // seller-side endpoints (owner seeing their own reserve).
+  secretMinPriceEnc String
+  locationEnc   String
+  contactEnc    String
+  photosEnc     String
+
+  // ── GPS coordinates (WGS84) — ENCRYPTED ───────────────────────
+  // Single AES-256-GCM field holding JSON: { lat, lng, accuracy? }.
+  // Decrypted ONLY:
+  //   • server-side in matching-engine (for Haversine scoring)
+  //   • for the listing owner (seller sees their own geo at any time)
+  //   • for the buyer AFTER both parties pay (status=BUYER_FEE_PAID)
+  // Encrypted (not raw columns) to make leakage impossible even if a
+  // future endpoint forgets to use `select` exclusion — the value is
+  // ciphertext without the key.
+  geoLocationEnc     String?   // AES-256-GCM — JSON { lat, lng, accuracy? }
+
+  // ── DEPRECATED — removed in migration 2 after data migration ──
+  // These columns are kept TEMPORARILY so scripts/migrate-geo-encryption.ts
+  // can read them. They will be dropped in the second migration.
+  // DO NOT write to these in new code — use geoLocationEnc instead.
+  // latitude           Float?
+  // longitude          Float?
+  // locationAccuracy   Float?
+
+  // ── SEASONAL_RENT-only fields (nullable for SELL / RENT) ──────
+  // For intent=SEASONAL_RENT, pricePerNight replaces askingPrice as
+  // the public price, and secretMinPricePerNightEnc replaces
+  // secretMinPriceEnc as the secret reserve (per-night, encrypted).
+  // minStayNights is the minimum booking length. availableFrom/To
+  // define the availability window.
+  pricePerNight              Int?       // DZD per night (public)
+  secretMinPricePerNightEnc  String?    // AES-256-GCM (per-night reserve)
+  minStayNights              Int?       @default(1)
+  availableFrom              DateTime?
+  availableTo                DateTime?
+
+  sellerFee     Int            @default(0) // computed on create, in DZD
+
+  status        ListingStatus  @default(UNMODERATED)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  matches       Match[]
+  queueEntries  MatchQueue[]
+  notifications MatchNotification[]
+}
+
+enum PropertyIntent {
+  SELL
+  RENT
+  SEASONAL_RENT
+}
+
+enum PropertyType {
+  APARTMENT
+  VILLA
+  INDIVIDUAL_HOUSE
+  COMMERCIAL
+  BUILDABLE_LAND
+  AGRICULTURAL_LAND
+}
+
+enum LegalStatus {
+  LIVRET_FONCIER
+  NOTARIZED_ACT
+  REGISTERED_UNNOTARIZED
+  ADMIN_DECISION
+  PRIVATE_ACT
+  NO_DOCS
+}
+
+// ─── Urban Permit Status (عقود التعمير) ────────────────────────────
+// SEPARATE from LegalStatus (which covers ownership documents).
+// This field covers BUILDING/permits status:
+//   • BUILDING_PERMIT           — رخصة بناء
+//   • NO_BUILDING_PERMIT        — بدون رخصة بناء
+//   • CONFORMITY_CERTIFICATE    — شهادة مطابقة (requires existing building)
+//   • BUILDING_IN_TITLE_DEED    — بناية مدرجة في سند الملكية (requires existing building)
+//
+// BUSINESS RULES (enforced in src/lib/schemas.ts):
+//   • NOT applicable to AGRICULTURAL_LAND (field must be null).
+//   • For BUILDABLE_LAND: only BUILDING_PERMIT / NO_BUILDING_PERMIT
+//     are allowed (the other two assume an existing building, which
+//     a buildable land by definition does not have yet).
+//   • For all other types (APARTMENT, VILLA, INDIVIDUAL_HOUSE,
+//     COMMERCIAL): all four options are allowed.
+enum UrbanPermitStatus {
+  BUILDING_PERMIT
+  NO_BUILDING_PERMIT
+  CONFORMITY_CERTIFICATE
+  BUILDING_IN_TITLE_DEED
+}
+
+enum ListingStatus {
+  UNMODERATED
+  ACTIVE
+  MATCHED
+  CLOSED
+}
+
+// ─── Match Requests (Buyer side) ───────────────────────────────────
+model MatchRequest {
+  id            String         @id @default(cuid())
+  userId        String
+  user          User           @relation(fields: [userId], references: [id])
+
+  intent        PropertyIntent
+  type          PropertyType
+  city          String
+  commune       String?
+  district      String?
+
+  maxBudgetEnc  String?        // encrypted buyer max budget (stage 2)
+  fullNameEnc   String?
+  phoneEnc      String?
+
+  criteriaHash  String         @default("")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  // ── Auto-notification tracking ─────────────────────────────────
+  // Set whenever a MatchNotification is created for this request,
+  // so the cron job doesn't double-notify for the same listing.
+  // Null = no notification sent yet for the latest match.
+  notifiedAt    DateTime?
+
+  status        RequestStatus  @default(OPEN)
+  matches       Match[]
+  queueEntries  MatchQueue[]
+  notifications MatchNotification[]
+}
+
+// ─── Match Notifications (In-App) ──────────────────────────────────
+// Created by the find-new-matches cron when a new listing matches
+// an OPEN (unfulfilled) buyer request. Channel is IN_APP only in
+// this phase — SMS/email intentionally out of scope (see roadmap).
+//
+// UNIQUENESS: one notification per (requestId, listingId) pair —
+// prevents double-notification if the cron runs twice.
+model MatchNotification {
+  id          String   @id @default(cuid())
+  requestId   String
+  request     MatchRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  listingId   String
+  listing     Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  matchId     String?  @unique // link to the actual Match row (created in same txn)
+  match       Match?   @relation(fields: [matchId], references: [id])
+
+  // Recipient — denormalized from request.userId for fast lookups
+  // (avoids a JOIN on every notification fetch).
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // IN_APP only in this phase. SMS / EMAIL are future scope.
+  channel     String   @default("IN_APP")
+  read        Boolean  @default(false)
+  readAt      DateTime?
+  sentAt      DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@unique([requestId, listingId]) // prevent duplicate notifications
+  @@index([userId, read])           // fast "unread for user" queries
+  @@index([sentAt])
+}
+
+enum RequestStatus {
+  OPEN
+  FULFILLED
+  CLOSED
+}
+
+// ─── MatchQueue — Waterfall queue for multiple matches ────────────
+// When stage-2 matching produces N matches, we create N queue entries
+// sorted by score DESC. Only the rank=1 entry becomes an active Match
+// at first. If it expires (48h) or is rejected, the next rank entry
+// is promoted to an active Match. This continues until the queue is
+// exhausted, at which point the buyer sees "no matches".
+model MatchQueue {
+  id            String         @id @default(cuid())
+  requestId     String
+  request       MatchRequest   @relation(fields: [requestId], references: [id])
+  listingId     String
+  listing       Listing        @relation(fields: [listingId], references: [id])
+
+  score         Float          // 0..100, based on askingPrice only (NOT secretMinPrice)
+  rank          Int            // 1 = highest score, shown first
+  status        QueueStatus    @default(PENDING)
+  matchId       String?        // set when promoted to an active Match
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+enum QueueStatus {
+  PENDING       // waiting in queue
+  ACTIVE        // promoted to a Match, currently being negotiated
+  CONSUMED      // match completed (ACCEPTED or REJECTED)
+  EXPIRED       // 48h passed, skipped
+}
+
+// ─── Matches ──────────────────────────────────────────────────────
+model Match {
+  id            String         @id @default(cuid())
+  requestId     String
+  request       MatchRequest   @relation(fields: [requestId], references: [id])
+  listingId     String
+  listing       Listing        @relation(fields: [listingId], references: [id])
+
+  buyerId       String
+  buyer         User           @relation("BuyerMatches",  fields: [buyerId],  references: [id])
+  sellerId      String
+  seller        User           @relation("SellerMatches", fields: [sellerId], references: [id])
+
+  score         Float          // 0..100, based on askingPrice only
+  queueRank     Int            @default(1) // which queue position this match holds
+
+  // Fee snapshots (DZD)
+  buyerFee      Int            @default(0)
+  sellerFee     Int            @default(0)
+
+  // Seller-first fee payment tracking
+  sellerFeePaid     Boolean    @default(false)
+  sellerFeePaidAt   DateTime?
+  sellerConsented   Boolean    @default(false)
+  sellerConsentedAt DateTime?
+  sellerConfirmContact Boolean @default(false) // seller confirms they reached out after buyer pays
+  sellerConfirmAt   DateTime?
+
+  // Buyer fee payment
+  buyerFeePaid      Boolean    @default(false)
+  buyerFeePaidAt    DateTime?
+
+  // 48h windows
+  sellerDeadline    DateTime?  // 48h after match creation for seller to pay+consent
+  buyerDeadline     DateTime?  // 48h after buyer notification for buyer to pay
+  refundEligibleAt  DateTime?    // 48h after buyer pays — if seller doesn't confirm contact, refund buyer
+
+  // ── Seller decision window (24h after BuyerPaymentExpired) ──
+  sellerDecisionDeadlineAt DateTime? // 24h for seller to choose refund or advance
+  sellerDecisionMadeAt     DateTime? // when seller made their choice (if any)
+  buyerCompensationDeadlineAt DateTime? // 24h for buyer to choose cash or credit after seller withdrawal
+
+  // ── Meeting agreement (new success definition) ──
+  meetingAgreementDeadlineAt DateTime? // 7 days to agree on meeting date
+  meetingAgreementStatus    MeetingAgreementStatus?
+  agreedMeetingDate         DateTime?  // the agreed-upon meeting date+time (UTC)
+  agreementConfirmedAt      DateTime?  // exact timestamp when both parties confirmed
+  buyerMeetingConsent       BuyerMeetingConsent?
+  sellerMeetingConsent      SellerMeetingConsent?
+
+  status        MatchStatus    @default(PROPOSED)
+  buyerConsent  Boolean        @default(false)
+
+  // ── DEVELOPER commission tracking ──
+  // Filled when a deal is closed (manually by platform rep after viewing).
+  dealClosedAt      DateTime?
+  finalDealValue    Int?      // actual transaction value in DZD
+  commissionDue     Float?    // calculated: finalDealValue × commissionRate / 100
+  commissionSettled Boolean   @default(false)
+
+  // ── Dispute tracking ──
+  // Set to true when either party reports a dispute via POST /api/match/[id]/report-dispute
+  disputeFlag      Boolean   @default(false)
+  disputeReason    String?
+  disputeReportedAt DateTime?
+  disputeReportedBy String? // user id of the reporter
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  expiresAt     DateTime?
+
+  negotiation   Negotiation?
+  rejection     MatchRejection?
+  conversation  Conversation?
+  viewings      Viewing[]
+  closedDeal    ClosedDeal?
+  notification  MatchNotification?
+}
+
+enum MatchStatus {
+  PROPOSED          // match created, seller notified, awaiting seller fee payment
+  SELLER_FEE_PAID   // seller paid fee, awaiting consent (48h window)
+  BUYER_NOTIFIED    // seller consented, buyer notified, awaiting buyer fee (48h)
+  BUYER_FEE_PAID    // buyer paid — contact revealed (ACCEPTED equivalent)
+  REJECTED
+  EXPIRED           // legacy alias → now split into EXPIRED_SELLER / EXPIRED_BUYER
+  REFUNDED          // buyer paid but seller didn't confirm contact in 48h → refund + advance
+  // ── Expanded lifecycle states (state machine) ──
+  EXPIRED_SELLER                           // seller withdrew or deadline expired
+  EXPIRED_BUYER                            // buyer didn't pay or rejected
+  SELLER_WITHDREW_PRE_BUYER_PAYMENT        // seller withdrew before buyer paid
+  SELLER_WITHDREW_POST_BUYER_PAYMENT       // seller withdrew after buyer paid → 48h ack window
+  BUYER_ACK_WINDOW_OPEN                    // buyer ack window active after seller withdrawal
+  CANCELLED_NO_COMPENSATION                // seller withdrew pre-buyer, ack window expired
+  CANCELLED_WITH_SELLER_PENALTY            // seller penalised
+  CANCELLED_WITH_PLATFORM_APOLOGY          // platform issued 5% apology to buyer
+  COMPLETED                                // match successfully completed
+  BUYER_PAYMENT_EXPIRED                    // buyer didn't pay → seller has 24h to decide
+  SELLER_REFUNDED_FULL                     // seller chose full refund after buyer default (final)
+  SELLER_ADVANCE                           // seller chose to keep fee as advance + 5% apology (final)
+  // ── Buyer compensation states (after seller pre-buyer withdrawal) ──
+  BUYER_COMPENSATED_PENDING               // buyer acknowledged, choosing between cash and credit
+  BUYER_COMPENSATED_CASH                  // buyer chose cash refund (0.10 × buyer_fee)
+  BUYER_COMPENSATED_CREDIT                // buyer chose 30-day credit (0.10 × buyer_fee)
+  MEETING_AGREEMENT_PENDING               // awaiting meeting date agreement between parties
+  MEETING_AGREEMENT_FAILED                // 7 days passed without agreement (final)
+}
+
+// ─── Meeting Agreement (success = documented meeting date) ───────
+// Per spec: success = both parties agree on a meeting date via the platform,
+// with explicit, timestamped consent from both sides.
+enum MeetingAgreementStatus {
+  NotStarted
+  SellerProposed
+  BuyerProposed
+  ConflictingProposals
+  Agreed
+  Cancelled
+}
+
+model BuyerMeetingConsent {
+  id            String        @id @default(cuid())
+  matchId       String        @unique
+  match         Match         @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  proposedDate  DateTime      // ISO 8601 — the proposed meeting date+time (UTC)
+  consentStatus ConsentStatus @default(Proposed)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model SellerMeetingConsent {
+  id            String        @id @default(cuid())
+  matchId       String        @unique
+  match         Match         @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  proposedDate  DateTime      // ISO 8601 — the proposed meeting date+time (UTC)
+  consentStatus ConsentStatus @default(Proposed)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+enum ConsentStatus {
+  Proposed
+  Approved
+  Rejected
+}
+
+// ─── Blind Negotiation ─────────────────────────────────────────────
+model Negotiation {
+  id            String         @id @default(cuid())
+  matchId       String         @unique
+  match         Match          @relation(fields: [matchId], references: [id])
+
+  buyerOffer    Int?
+  sellerOffer   Int?
+  buyerNoteEnc  String?
+  sellerNoteEnc String?
+
+  buyerTurn     Boolean        @default(true)
+  rounds        Int            @default(0)
+  revealed      Boolean        @default(false)
+  sellerHandled Boolean        @default(false)
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// ─── Match Rejection (Feedback Loop) ──────────────────────────────
+// When a buyer sees a match but refuses to pay the fee (clicks
+// "هذا لا يناسبني"), we record the rejection with the reason.
+// This data feeds back into UserWeightProfile to adjust the
+// matching weights for that user — making the platform smarter
+// with each rejection.
+model MatchRejection {
+  id            String           @id @default(cuid())
+  matchId       String           @unique
+  match         Match            @relation(fields: [matchId], references: [id])
+  userId        String
+  user          User             @relation(fields: [userId], references: [id])
+
+  // Snapshot of the match at rejection time (for analysis)
+  score         Float
+  intent        PropertyIntent
+  type          PropertyType
+  city          String
+  commune       String?
+  askingPrice   Int
+  bedrooms      Int?
+  bathrooms     Int?
+
+  // Why did the buyer reject?
+  reason        RejectionReason
+  customNote    String?          // optional free-text
+
+  createdAt     DateTime         @default(now())
+}
+
+enum RejectionReason {
+  PRICE_TOO_HIGH        // "السعر مرتفع جداً"
+  LOCATION_NOT_IDEAL    // "الموقع غير مناسب"
+  TOO_FEW_ROOMS         // "غرف قليلة"
+  TOO_MANY_ROOMS        // "غرف أكثر من حاجتي"
+  AREA_TOO_SMALL        // "المساحة صغيرة"
+  AREA_TOO_LARGE        // "المساحة كبيرة"
+  LEGAL_STATUS_WEAK     // "الوضعية القانونية غير مطمئنة"
+  DATES_NOT_AVAILABLE   // "التواريخ غير متاحة" (SEASONAL_RENT)
+  OTHER                 // "سبب آخر"
+}
+
+// ─── User Weight Profile (Dynamic Weights) ────────────────────────
+// Each user has a personal weight profile that starts at the
+// platform defaults (price: 40, location: 40, features: 20)
+// and adjusts over time based on their rejection patterns.
+//
+// Example: if a user rejects matches with high scores primarily
+// due to LOCATION_NOT_IDEAL, the system increases the location
+// weight (making location more important in future matches)
+// and decreases the price weight proportionally.
+model UserWeightProfile {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id])
+
+  // Current weights (must sum to 100)
+  priceWeight       Float @default(40)
+  locationWeight    Float @default(40)
+  featuresWeight    Float @default(20)
+
+  // Learning stats
+  totalRejections   Int   @default(0)
+  priceRejections   Int   @default(0)
+  locationRejections Int  @default(0)
+  featuresRejections Int  @default(0)
+
+  // Adjustment factor: how much to shift per rejection (0.5 = gentle)
+  learningRate      Float @default(0.5)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ─── Reviews ──────────────────────────────────────────────────────
+// Users can leave a review ONLY after completing a match (BUYER_FEE_PAID).
+// Reviews start as PENDING (not shown publicly) and require admin
+// approval before appearing on the homepage.
+model Review {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id])
+  matchId       String?      // optional link to the completed match
+  role          Role         // BUYER or SELLER — who wrote this
+  rating        Int          // 1..5
+  comment       String       // max 500 chars (enforced in Zod)
+  status        ReviewStatus @default(PENDING)
+  createdAt     DateTime     @default(now())
+
+  @@index([status]) // speed up public queries: WHERE status = 'APPROVED'
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  AGENCY SUBSCRIPTION (3-tier model — AGENCY category)
+// ══════════════════════════════════════════════════════════════════
+// Agencies pay a subscription instead of per-deal fees.
+// Active subscription → no per-deal fees for any match.
+model AgencySubscription {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan        SubscriptionPlan
+  amount      Int      // DZD paid
+  listingsLimit Int    // max listings allowed per month for this plan
+  startDate   DateTime @default(now())
+  endDate     DateTime // subscription validity end
+  status      SubscriptionStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([status])
+}
+
+enum SubscriptionPlan {
+  BASIC     // e.g., 10 listings/month
+  PRO       // e.g., 50 listings/month
+  ENTERPRISE // unlimited
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  DEVELOPER PARTNERSHIP (3-tier model — DEVELOPER category)
+// ══════════════════════════════════════════════════════════════════
+// Developers have a contract with the platform.
+// Commission is a percentage of the actual deal value (agreed per developer).
+model DeveloperPartnership {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contractRef     String   // contract reference number
+  commissionRate  Float    // percentage (0-100), e.g., 2.5 means 2.5%
+  signedAt        DateTime @default(now())
+  status          PartnershipStatus @default(ACTIVE)
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum PartnershipStatus {
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  CONVERSATIONS & MESSAGES (internal chat — for DEVELOPER matches)
+// ══════════════════════════════════════════════════════════════════
+// One conversation per match. Messages are filtered server-side
+// to block phone numbers / contact info sharing.
+// Used primarily for DEVELOPER matches (where contact reveal is
+// structurally blocked), but available for all matches as a
+// general communication channel.
+model Conversation {
+  id          String   @id @default(cuid())
+  matchId     String   @unique // 1:1 with Match
+  match       Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  participants User[]  @relation("ConversationParticipants") // buyer + seller
+  createdAt   DateTime @default(now())
+  closedAt    DateTime? // null while active; set when deal closes/cancels
+
+  messages    Message[]
+  @@index([matchId])
+}
+
+model Message {
+  id              String   @id @default(cuid())
+  conversationId  String
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId        String
+  sender          User     @relation(fields: [senderId], references: [id])
+  content         String   // max 1000 chars (enforced in Zod)
+  sentAt          DateTime @default(now())
+  readAt          DateTime? // null until the other party fetches messages
+  // ── Security filter fields ──
+  flagged         Boolean  @default(false) // true if contact-phrase detected (allowed but flagged for review)
+  blocked         Boolean  @default(false) // true if message was REJECTED by filter (not shown to recipient)
+  blockedReason   String?  // "phone_number" | "external_link" | "social_handle" | "email"
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([blocked])
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  VIEWINGS (scheduled property inspections — DEVELOPER matches)
+// ══════════════════════════════════════════════════════════════════
+// For DEVELOPER matches, instead of revealing contact info,
+// the platform schedules a viewing with a representative present.
+model Viewing {
+  id                  String   @id @default(cuid())
+  matchId             String
+  match               Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  scheduledAt         DateTime // when the viewing will happen
+  representativeId    String?  // platform staff user id (can be null until assigned)
+  representative      User?    @relation(fields: [representativeId], references: [id])
+  representativeName  String?  // display name shown to both parties (NO contact info)
+  status              ViewingStatus @default(SCHEDULED)
+  buyerConfirmed      Boolean  @default(false)
+  sellerConfirmed     Boolean  @default(false)
+  notes               String?  // internal notes from representative (NOT shown to parties)
+  outcome             String?  // "completed" | "no_show_buyer" | "no_show_seller" | "cancelled"
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([matchId])
+  @@index([status])
+}
+
+enum ViewingStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  CLOSED DEALS — actual transaction prices for future Hedonic Model
+// ══════════════════════════════════════════════════════════════════
+// Records the FINAL actual price a deal closed at (not asking price).
+// This is the critical dataset for future automated valuation models.
+//
+// CONFIDENCE LEVELS — must NEVER be treated as equal in analysis:
+//   • PLATFORM_VERIFIED — filled by platform representative (high trust).
+//     Used for DEVELOPER matches where a rep attends the viewing.
+//   • SELF_REPORTED — filled by buyer/seller via post-deal survey.
+//     Voluntary, unverified, may be inaccurate. Use with caution in
+//     any statistical model — weight lower or exclude entirely.
+//
+// PRIVACY: The matchId link exists for audit but any ANALYTICAL EXPORT
+// should use a de-identified view (price, location, features, date only)
+// WITHOUT user IDs. See lib/analytics-export.ts (future).
+model ClosedDeal {
+  id            String   @id @default(cuid())
+  matchId       String   @unique // 1:1 with Match
+  match         Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  finalPrice    Int      // actual transaction price in DZD
+  currency      String   @default("DZD")
+  reportedBy    DealReporter // BUYER / SELLER / BOTH / PLATFORM
+  confidence    DealConfidence // PLATFORM_VERIFIED / SELF_REPORTED
+  // ── Survey tracking ──
+  surveySentAt  DateTime? // when the post-deal survey was sent
+  surveyRespondedAt DateTime? // when the user responded (null = no response yet)
+  closedAt      DateTime? // when the deal actually closed (may differ from survey response)
+  createdAt     DateTime @default(now())
+
+  @@index([confidence])
+  @@index([closedAt])
+}
+
+enum DealReporter {
+  BUYER
+  SELLER
+  BOTH
+  PLATFORM
+}
+
+enum DealConfidence {
+  PLATFORM_VERIFIED // filled by platform rep — high trust
+  SELF_REPORTED     // filled by user survey — lower trust
+}
+
+enum Season {
+  SUMMER    // صيف
+  WINTER    // شتاء
+  EID       // عيد
+  HOLIDAY   // عطلة عامة
+  OFF_SEASON // موسم عادي
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  PROMOTIONAL OFFERS (Nitro Offer — limited-time fee discounts)
+// ══════════════════════════════════════════════════════════════════
+// Generic, reusable model for time-limited promotional discounts.
+// Supports 3 categories (INDIVIDUAL/AGENCY/DEVELOPER) and 3 discount
+// types (PERCENTAGE/FIXED_WAIVER/FREE_TRIAL_DAYS).
+// Admin can create/toggle/extend offers without code changes.
+model PromotionalOffer {
+  id              String   @id @default(cuid())
+  code            String   @unique   // e.g., "LAUNCH_NITRO_2026"
+  category        AccountCategory     // INDIVIDUAL | AGENCY | DEVELOPER
+  discountType    String              // "PERCENTAGE" | "FIXED_WAIVER" | "FREE_TRIAL_DAYS"
+  discountValue   Float               // percentage (0-100), amount (DZD), or days
+  maxRedemptions  Int?                // null = unlimited
+  redemptionsUsed Int      @default(0)
+  startsAt        DateTime
+  endsAt          DateTime
+  active          Boolean  @default(true)   // instant kill switch
+  createdAt       DateTime @default(now())
+  redemptions     OfferRedemption[]
+}
+
+model OfferRedemption {
+  id          String   @id @default(cuid())
+  offerId     String
+  offer       PromotionalOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  userId      String
+  matchId     String?  // for INDIVIDUAL/DEVELOPER fee discounts
+  redeemedAt  DateTime @default(now())
+
+  @@unique([offerId, userId, matchId]) // prevent double-use on same deal
+  @@index([offerId])
+  @@index([userId])
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  RATE LIMITING (shared across all instances via the DB)
+// ══════════════════════════════════════════════════════════════════
+// In-memory rate limiters break in serverless / multi-instance deployments
+// (each instance gets its own Map, so the limit is multiplied by N). Storing
+// the counter in the DB makes it authoritative across all replicas.
+//
+// `id` is a composite key like "demand-estimate:1.2.3.4" — combining the
+// route name + client IP. This lets multiple rate-limited routes share
+// the same table without collisions.
+//
+// Cleanup: stale rows (where resetAt < now) are deleted by the
+// process-expired cron (see src/lib/cron/process-expired.ts) to prevent
+// unbounded growth. A lazy cleanup on read also runs on each request.
+model RateLimitEntry {
+  id        String   @id           // e.g. "demand-estimate:1.2.3.4"
+  count     Int      @default(1)
+  resetAt   DateTime               // when the window expires (now + windowMs)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100" width="400" height="100">
+  <!-- Icon -->
+  <circle cx="50" cy="50" r="45" fill="#C45C26"/>
+  <text x="50" y="58" text-anchor="middle" font-family="Cairo, Arial, sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF">ع</text>
+  <path d="M 30 55 L 42 67 L 68 38" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  
+  <!-- Text -->
+  <text x="110" y="45" font-family="Cairo, Arial, sans-serif" font-size="28" font-weight="bold" fill="#1A2332">عقار</text>
+  <text x="195" y="45" font-family="Cairo, Arial, sans-serif" font-size="28" font-weight="600" fill="#C45C26">Match</text>
+  
+  <!-- Tagline -->
+  <text x="110" y="70" font-family="Cairo, Arial, sans-serif" font-size="12" fill="#666666">قرارك العقاري، بوضوح أكبر</text>
+</svg>

@@ -1,0 +1,42 @@
+# ═══════════════════════════════════════════════════════════════
+#  عقار Match — robots.txt
+#  https://aqarmatch.dz
+# ═══════════════════════════════════════════════════════════════
+
+# ── Default: allow all crawlers full access to pages ──
+User-agent: *
+Allow: /
+Allow: /blog
+Allow: /immobilier
+
+# ── Block API endpoints (JSON, not for indexing) ──
+Disallow: /api/
+
+# ── Block internal system paths ──
+Disallow: /_next/
+Disallow: /admin
+
+# ── Crawl rate: be gentle on our servers ──
+Crawl-delay: 1
+
+# ── Googlebot: allow everything except API ──
+User-agent: Googlebot
+Allow: /
+Disallow: /api/
+Crawl-delay: 1
+
+# ── Bingbot: allow everything except API ──
+User-agent: Bingbot
+Allow: /
+Disallow: /api/
+Crawl-delay: 2
+
+# ── AI crawlers: allow (helps with schema understanding) ──
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+# ── Sitemaps ──
+Sitemap: https://aqarmatch.dz/sitemap.xml

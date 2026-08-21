@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Monochrome version - single color (navy) -->
+  <circle cx="100" cy="100" r="90" fill="#1A2332"/>
+  
+  <!-- Arabic letter ع (Ain) -->
+  <text x="100" y="115" text-anchor="middle" font-family="Cairo, Arial, sans-serif" font-size="80" font-weight="bold" fill="#FFFFFF">ع</text>
+  
+  <!-- Checkmark -->
+  <path d="M 65 120 L 85 140 L 135 85" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="90" fill="#C45C26"/>
+  
+  <!-- Offset ring (depth effect) -->
+  <circle cx="100" cy="100" r="82" fill="none" stroke="#1A2332" stroke-width="2" opacity="0.3"/>
+  
+  <!-- Arabic letter ع (Ain) - stylized -->
+  <text x="100" y="115" text-anchor="middle" font-family="Cairo, Arial, sans-serif" font-size="80" font-weight="bold" fill="#FFFFFF">ع</text>
+  
+  <!-- Checkmark integrated into the design -->
+  <path d="M 65 120 L 85 140 L 135 85" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+</svg>
