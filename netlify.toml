@@ -4,9 +4,7 @@
 # ───────────────────────────────────────────────────────────────────
 
 [build]
-  # prisma db push syncs schema to the DB (creates tables if missing)
-  # prisma generate builds the Prisma Client
-  command = "npx prisma db push --skip-generate && npm run build"
+  command = "npm run build"
   publish = ".next"
 
 [build.environment]
