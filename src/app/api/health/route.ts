@@ -14,10 +14,10 @@ export async function GET() {
     hint: !process.env.DATABASE_URL
       ? "غير مُعرّف — أضفه في Netlify → Site Settings → Environment Variables"
       : process.env.DATABASE_URL.startsWith("postgresql")
-        ? "صيغة صحيحة (PostgreSQL)"
+        ? `صيغة صحيحة (PostgreSQL) — يبدأ بـ: ${process.env.DATABASE_URL.slice(0, 25)}...`
         : process.env.DATABASE_URL.startsWith("file:")
-          ? "⚠️ يشير إلى ملف SQLite — يجب أن يكون PostgreSQL في الإنتاج"
-          : "⚠️ الصيغة غير متوقعة — تأكد من أن القيمة تبدأ بـ postgresql://",
+          ? `⚠️ يشير إلى SQLite — القيمة: ${process.env.DATABASE_URL.slice(0, 30)}`
+          : `⚠️ صيغة غير متوقعة — يبدأ بـ: ${process.env.DATABASE_URL.slice(0, 30)}`,
   };
 
   // 2. Encryption
