@@ -58,6 +58,7 @@ const SQL_STATEMENTS = [
     "id" TEXT NOT NULL, "phoneHash" TEXT NOT NULL, "codeHash" TEXT NOT NULL,
     "expiresAt" TIMESTAMP(3) NOT NULL, "consumed" BOOLEAN NOT NULL DEFAULT false,
     "attempts" INTEGER NOT NULL DEFAULT 0,
+    "userId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "OtpCode_pkey" PRIMARY KEY ("id")
   )`,
@@ -73,20 +74,22 @@ const SQL_STATEMENTS = [
 
   `CREATE TABLE IF NOT EXISTS "EmailVerification" (
     "id" TEXT NOT NULL, "userId" TEXT NOT NULL, "tokenHash" TEXT NOT NULL,
-    "codeHash" TEXT, "expiresAt" TIMESTAMP(3) NOT NULL, "usedAt" TIMESTAMP(3),
+    "codeHash" TEXT NOT NULL, "expiresAt" TIMESTAMP(3) NOT NULL,
+    "consumed" BOOLEAN NOT NULL DEFAULT false,
+    "attempts" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "EmailVerification_pkey" PRIMARY KEY ("id")
   )`,
   `CREATE INDEX IF NOT EXISTS "EmailVerification_userId_idx" ON "EmailVerification"("userId")`,
 
   `CREATE TABLE IF NOT EXISTS "RateLimitEntry" (
-    "id" TEXT NOT NULL, "key" TEXT NOT NULL, "window" TEXT NOT NULL,
+    "id" TEXT NOT NULL,
     "count" INTEGER NOT NULL DEFAULT 1,
-    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "resetAt" TIMESTAMP(3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "RateLimitEntry_pkey" PRIMARY KEY ("id")
   )`,
-  `CREATE INDEX IF NOT EXISTS "RateLimitEntry_key_window_idx" ON "RateLimitEntry"("key", "window")`,
 
   `CREATE TABLE IF NOT EXISTS "AuditLog" (
     "id" TEXT NOT NULL, "userId" TEXT, "event" "AuditEvent" NOT NULL,
