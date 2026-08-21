@@ -43,8 +43,8 @@ const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 min
 
 // Fixed dummy hash used when email doesn't exist — ensures verifyPassword
 // runs in constant time (prevents timing-based enumeration).
-// This is an argon2id hash of a random string; we never reveal what.
-const DUMMY_HASH = "$argon2id$v=19$m=19456,t=2,p=1$ZHVtbXlzYWx0$Y2hhbmdlbWU";
+// This is a bcrypt hash of a random string; we never reveal what.
+const DUMMY_HASH = "$2a$12$046tYRLeIm/a06K2/iY9Aem6N.I3dtEDZ/7POwnWluxwUT/knBMGK";
 
 export async function POST(req: Request) {
   const ip = getClientIp(req as NextRequest);
