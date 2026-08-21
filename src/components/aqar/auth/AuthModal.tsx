@@ -142,9 +142,13 @@ export function AuthModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone }),
       });
-      const json = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let json: any = {};
+      try { json = await res.json(); } catch { /* non-JSON response */ }
       if (!res.ok || !json.ok) {
-        setError(json?.error || t("auth.error.generic") + (json?.debugCode ? ` (${json.debugCode})` : ""));
+        const msg = (typeof json?.error === "string" && json.error) || t("auth.error.generic");
+        const detail = typeof json?.debugCode === "string" ? ` (${json.debugCode})` : "";
+        setError(msg + detail);
         return;
       }
       setExpiresInMin(json.expiresInMin || 5);
@@ -170,9 +174,11 @@ export function AuthModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, code }),
       });
-      const json = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let json: any = {};
+      try { json = await res.json(); } catch { /* non-JSON response */ }
       if (!res.ok || !json.ok) {
-        setError(json?.error || t("auth.error.invalidCode"));
+        setError((typeof json?.error === "string" && json.error) || t("auth.error.invalidCode"));
         return;
       }
       // Success — close + notify parent
@@ -195,18 +201,27 @@ export function AuthModal({
     password: string;
     rememberMe: boolean;
   }): Promise<{ ok: boolean; error?: string }> {
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(vals),
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      return { ok: false, error: json?.error || t("auth.error.invalidCredentials") };
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(vals),
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let json: any = {};
+      try { json = await res.json(); } catch { /* non-JSON response */ }
+      if (!res.ok) {
+        return { ok: false, error: (typeof json?.error === "string" && json.error) || t("auth.error.invalidCredentials") };
+      }
+      onAuthenticated();
+      handleClose();
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof TypeError && e.message.includes("fetch")) {
+        return { ok: false, error: t("auth.error.network") };
+      }
+      return { ok: false, error: t("auth.error.generic") };
     }
-    onAuthenticated();
-    handleClose();
-    return { ok: true };
   }
 
   async function handleSignupSubmit(vals: {
@@ -223,10 +238,13 @@ export function AuthModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(vals),
       });
-      const json = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let json: any = {};
+      try { json = await res.json(); } catch { /* non-JSON response */ }
       if (!res.ok) {
-        const detail = json?.debugCode ? ` (${json.debugCode})` : "";
-        return { ok: false, error: json?.error + detail || t("auth.error.generic") };
+        const msg = (typeof json?.error === "string" && json.error) || t("auth.error.generic");
+        const detail = typeof json?.debugCode === "string" ? ` (${json.debugCode})` : "";
+        return { ok: false, error: msg + detail };
       }
     // Signup succeeded — user needs email verification before full access.
     // We auto-login (session cookie set by the API), but show a banner
@@ -258,9 +276,13 @@ export function AuthModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: forgotEmail }),
       });
-      const json = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let json: any = {};
+      try { json = await res.json(); } catch { /* non-JSON response */ }
       if (!res.ok) {
-        setError(json?.error || t("auth.error.generic") + (json?.debugCode ? ` (${json.debugCode})` : ""));
+        const msg = (typeof json?.error === "string" && json.error) || t("auth.error.generic");
+        const detail = typeof json?.debugCode === "string" ? ` (${json.debugCode})` : "";
+        setError(msg + detail);
         return;
       }
       setForgotSent(true);
@@ -290,9 +312,11 @@ export function AuthModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: resetToken, password: resetPassword }),
       });
-      const json = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let json: any = {};
+      try { json = await res.json(); } catch { /* non-JSON response */ }
       if (!res.ok) {
-        setError(json?.error || t("auth.error.invalidResetToken"));
+        setError((typeof json?.error === "string" && json.error) || t("auth.error.invalidResetToken"));
         return;
       }
       setSuccess(t("auth.resetSuccess"));
@@ -322,9 +346,11 @@ export function AuthModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: verifyEmail, code: verifyCode }),
       });
-      const json = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let json: any = {};
+      try { json = await res.json(); } catch { /* non-JSON response */ }
       if (!res.ok) {
-        setError(json?.error || t("auth.error.invalidCode"));
+        setError((typeof json?.error === "string" && json.error) || t("auth.error.invalidCode"));
         return;
       }
       setSuccess(t("auth.emailVerified"));
