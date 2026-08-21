@@ -23,9 +23,9 @@ generator client {
 }
 
 datasource db {
-  // SQLite for local dev — switch to "postgresql" for production
-  // (see netlify.toml for the production env vars).
-  provider = "sqlite"
+  // PostgreSQL for production (Supabase). For local SQLite dev,
+  // change provider to "sqlite" and set DATABASE_URL=file:./dev.db
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
