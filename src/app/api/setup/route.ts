@@ -132,23 +132,32 @@ export async function GET() {
         executed++;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        // Ignore "already exists" errors
-        if (!msg.includes("already exists")) {
-          errors.push(msg.slice(0, 100));
+        // Log ALL errors for debugging (not just non-"already exists")
+        if (!msg.includes("already exists") && !msg.includes("does not exist")) {
+          errors.push(msg.slice(0, 200));
         }
         executed++;
       }
     }
 
     // Verify
-    const userCount = await db.user.count();
-
-    return NextResponse.json({
-      ok: true,
-      message: `تم إنشاء الجداول! (${executed} أوامر SQL)`,
-      userCount,
-      errors: errors.length > 0 ? errors : undefined,
-    });
+    try {
+      const userCount = await db.user.count();
+      return NextResponse.json({
+        ok: true,
+        message: `تم إنشاء الجداول! (${executed} أوامر SQL)`,
+        userCount,
+        errors: errors.length > 0 ? errors : undefined,
+      });
+    } catch (verifyErr) {
+      return NextResponse.json({
+        ok: false,
+        error: "تم تنفيذ SQL لكن التحقق فشل",
+        details: verifyErr instanceof Error ? verifyErr.message.slice(0, 300) : String(verifyErr).slice(0, 300),
+        executed,
+        errors: errors.length > 0 ? errors : undefined,
+      }, { status: 500 });
+    }
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : String(e);
     console.error("[setup] FATAL:", errMsg);
