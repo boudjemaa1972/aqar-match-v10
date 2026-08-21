@@ -39,8 +39,9 @@ export async function POST(req: Request) {
     //   2. ENCRYPTION_PASSPHRASE / ENCRYPTION_KEY_SALT not set
     //   3. Prisma client not generated (missing postinstall hook)
     //   4. OtpCode table doesn't exist (migrations not run on Supabase)
+    const errMsg = error instanceof Error ? error.message : String(error);
     console.error("[otp/request] FATAL:", {
-      message: error instanceof Error ? error.message : String(error),
+      message: errMsg,
       stack: error instanceof Error ? error.stack : undefined,
       env: {
         hasDatabaseUrl: !!process.env.DATABASE_URL,
@@ -51,9 +52,21 @@ export async function POST(req: Request) {
       },
     });
 
-    // Return a generic error to the user (don't leak internals)
+    // Determine a user-friendly error based on the actual error
+    let userMessage = "تعذّر إرسال رمز التحقق.";
+    if (errMsg.includes("DATABASE_URL") || errMsg.includes("P1001") || errMsg.includes("connector") || errMsg.includes("database")) {
+      userMessage = "تعذّر الاتصال بقاعدة البيانات. تحقق من إعداد DATABASE_URL.";
+    } else if (errMsg.includes("ENCRYPTION") || errMsg.includes("ENCRYPTION_PASSPHRASE") || errMsg.includes("ENCRYPTION_KEY_SALT") || errMsg.includes("decrypt")) {
+      userMessage = "تعذّر تشفير البيانات. تحقق من إعداد ENCRYPTION_PASSPHRASE و ENCRYPTION_KEY_SALT.";
+    } else if (errMsg.includes("OtpCode") || errMsg.includes("table") || errMsg.includes("migration") || errMsg.includes("P2021")) {
+      userMessage = "جدول OTP غير موجود. تأكد من تشغيل الترحيلات (migrations) على قاعدة البيانات.";
+    } else if (errMsg.includes("rate") || errMsg.includes("limit")) {
+      userMessage = "تم تجاوز حد الطلبات. حاول بعد قليل.";
+    }
+    // Append a short code for support / debugging
+    const code = errMsg.slice(0, 80).replace(/[^a-zA-Z0-9_ ]/g, "");
     return NextResponse.json(
-      { error: "تعذّر إرسال رمز التحقق. تحقق من إعدادات الخادم." },
+      { error: userMessage, debugCode: code },
       { status: 500 },
     );
   }

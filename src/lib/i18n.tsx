@@ -550,6 +550,10 @@ const translations: Record<Lang, Record<string, string>> = {
     "auth.error.invalidCredentials": "بيانات الدخول غير صحيحة",
     "auth.error.invalidCode": "رمز غير صحيح أو منتهي",
     "auth.error.invalidResetToken": "الرابط غير صالح أو منتهي. اطلب رابطاً جديداً.",
+    "auth.error.network": "تعذّر الاتصال بالخادم. تحقق من اتصالك بالإنترنت.",
+    "auth.error.serverDown": "الخادم غير متاح حالياً. حاول بعد قليل.",
+    "auth.error.dbConnection": "تعذّر الاتصال بقاعدة البيانات.",
+    "auth.error.serverConfig": "خطأ في إعدادات الخادم ({detail}). تواصل مع المشرف.",
     "auth.showPassword": "إظهار كلمة المرور",
     "auth.hidePassword": "إخفاء كلمة المرور",
 
@@ -1211,6 +1215,10 @@ const translations: Record<Lang, Record<string, string>> = {
     "auth.error.invalidCredentials": "Identifiants incorrects",
     "auth.error.invalidCode": "Code incorrect ou expiré",
     "auth.error.invalidResetToken": "Lien invalide ou expiré. Demandez un nouveau lien.",
+    "auth.error.network": "Impossible de contacter le serveur. Vérifiez votre connexion.",
+    "auth.error.serverDown": "Le serveur est indisponible. Réessayez plus tard.",
+    "auth.error.dbConnection": "Erreur de connexion à la base de données.",
+    "auth.error.serverConfig": "Erreur de configuration serveur ({detail}). Contactez l'administrateur.",
     "auth.showPassword": "Afficher le mot de passe",
     "auth.hidePassword": "Masquer le mot de passe",
 

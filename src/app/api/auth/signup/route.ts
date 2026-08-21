@@ -190,8 +190,9 @@ export async function POST(req: Request) {
   });
   } catch (error) {
     // ── CRITICAL: log the actual error for debugging on Netlify ──
+    const errMsg = error instanceof Error ? error.message : String(error);
     console.error("[signup] FATAL:", {
-      message: error instanceof Error ? error.message : String(error),
+      message: errMsg,
       stack: error instanceof Error ? error.stack : undefined,
       env: {
         hasDatabaseUrl: !!process.env.DATABASE_URL,
@@ -202,8 +203,21 @@ export async function POST(req: Request) {
         hasSmtpHost: !!process.env.SMTP_HOST,
       },
     });
+
+    // Determine a user-friendly error based on the actual error
+    let userMessage = "تعذّر إنشاء الحساب.";
+    if (errMsg.includes("DATABASE_URL") || errMsg.includes("P1001") || errMsg.includes("connector") || errMsg.includes("database")) {
+      userMessage = "تعذّر الاتصال بقاعدة البيانات. تحقق من إعداد DATABASE_URL.";
+    } else if (errMsg.includes("ENCRYPTION") || errMsg.includes("ENCRYPTION_PASSPHRASE") || errMsg.includes("decrypt")) {
+      userMessage = "تعذّر تشفير البيانات. تحقق من إعدادات التشفير.";
+    } else if (errMsg.includes("email") || errMsg.includes("smtp") || errMsg.includes("SMTP")) {
+      userMessage = "تعذّر إرسال بريد التحقق. تحقق من إعدادات البريد الإلكتروني (SMTP).";
+    } else if (errMsg.includes("Unique constraint") || errMsg.includes("P2002")) {
+      userMessage = "البريد الإلكتروني مسجل مسبقاً. استخدم بريداً آخر أو سجّل الدخول.";
+    }
+    const code = errMsg.slice(0, 80).replace(/[^a-zA-Z0-9_ ]/g, "");
     return NextResponse.json(
-      { error: "تعذّر إنشاء الحساب. تحقق من إعدادات الخادم." },
+      { error: userMessage, debugCode: code },
       { status: 500 },
     );
   }

@@ -143,16 +143,22 @@ export function PhoneAuthGate({ onVerified, explanation, compact = false }: Prop
         body: JSON.stringify({ phone: phone.trim() }),
       });
       const text = await res.text();
-      let json: { ok?: boolean; error?: string; devCode?: string; expiresInMin?: number } | null = null;
+      let json: { ok?: boolean; error?: string; devCode?: string; expiresInMin?: number; debugCode?: string } | null = null;
       if (text) { try { json = JSON.parse(text); } catch { json = null; } }
       if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || t("auth.error.generic"));
+        const serverMsg = json?.error || t("auth.error.generic");
+        const detail = json?.debugCode ? ` (${json.debugCode})` : "";
+        throw new Error(serverMsg + detail);
       }
       if (json.devCode) setDevCode(json.devCode);
       setResendCooldown(60); // 60-second cooldown
       setStep("code");
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("auth.error.generic"));
+      if (e instanceof TypeError && e.message.includes("fetch")) {
+        setError(t("auth.error.network"));
+      } else {
+        setError(e instanceof Error ? e.message : t("auth.error.generic"));
+      }
     } finally {
       setLoading(false);
     }
@@ -173,10 +179,12 @@ export function PhoneAuthGate({ onVerified, explanation, compact = false }: Prop
         body: JSON.stringify({ phone: phone.trim(), code }),
       });
       const text = await res.text();
-      let json: { ok?: boolean; error?: string; user?: { name?: string; phone?: string } } | null = null;
+      let json: { ok?: boolean; error?: string; user?: { name?: string; phone?: string }; debugCode?: string } | null = null;
       if (text) { try { json = JSON.parse(text); } catch { json = null; } }
       if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || t("auth.error.generic"));
+        const serverMsg = json?.error || t("auth.error.invalidCode");
+        const detail = json?.debugCode ? ` (${json.debugCode})` : "";
+        throw new Error(serverMsg + detail);
       }
       setStep("success");
       // Clear sessionStorage on success
@@ -190,7 +198,11 @@ export function PhoneAuthGate({ onVerified, explanation, compact = false }: Prop
         phone: json.user?.phone || phone.trim(),
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("auth.error.generic"));
+      if (e instanceof TypeError && e.message.includes("fetch")) {
+        setError(t("auth.error.network"));
+      } else {
+        setError(e instanceof Error ? e.message : t("auth.error.generic"));
+      }
     } finally {
       setLoading(false);
     }

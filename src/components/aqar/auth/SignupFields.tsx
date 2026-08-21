@@ -62,8 +62,14 @@ export function SignupFields({
       if (!result.ok) {
         setError(result.error || t("auth.error.generic"));
       }
-    } catch {
-      setError(t("auth.error.generic"));
+    } catch (err) {
+      if (err instanceof TypeError && err.message.includes("fetch")) {
+        setError(t("auth.error.network"));
+      } else if (err instanceof Error) {
+        setError(t("auth.error.generic") + ": " + err.message);
+      } else {
+        setError(t("auth.error.generic"));
+      }
     } finally {
       setSubmitting(false);
     }

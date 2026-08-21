@@ -144,14 +144,18 @@ export function AuthModal({
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
-        setError(json?.error || t("auth.error.generic"));
+        setError(json?.error || t("auth.error.generic") + (json?.debugCode ? ` (${json.debugCode})` : ""));
         return;
       }
       setExpiresInMin(json.expiresInMin || 5);
       if (json.devCode) setDevCode(json.devCode);
       setMode("phone-otp");
-    } catch {
-      setError(t("auth.error.generic"));
+    } catch (e) {
+      if (e instanceof TypeError && e.message.includes("fetch")) {
+        setError(t("auth.error.network"));
+      } else {
+        setError(t("auth.error.generic") + (e instanceof Error ? `: ${e.message}` : ""));
+      }
     } finally {
       setLoading(false);
     }
@@ -174,8 +178,12 @@ export function AuthModal({
       // Success — close + notify parent
       onAuthenticated();
       handleClose();
-    } catch {
-      setError(t("auth.error.generic"));
+    } catch (e) {
+      if (e instanceof TypeError && e.message.includes("fetch")) {
+        setError(t("auth.error.network"));
+      } else {
+        setError(t("auth.error.generic") + (e instanceof Error ? `: ${e.message}` : ""));
+      }
     } finally {
       setLoading(false);
     }
@@ -209,15 +217,17 @@ export function AuthModal({
     phone?: string;
     rememberMe: boolean;
   }): Promise<{ ok: boolean; error?: string }> {
-    const res = await fetch("/api/auth/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(vals),
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      return { ok: false, error: json?.error || t("auth.error.generic") };
-    }
+    try {
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(vals),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        const detail = json?.debugCode ? ` (${json.debugCode})` : "";
+        return { ok: false, error: json?.error + detail || t("auth.error.generic") };
+      }
     // Signup succeeded — user needs email verification before full access.
     // We auto-login (session cookie set by the API), but show a banner
     // telling them to check their email.
@@ -229,6 +239,12 @@ export function AuthModal({
     setMode("verify-email-otp");
     setSuccess(t("auth.signupSuccess"));
     return { ok: true };
+    } catch (e) {
+      if (e instanceof TypeError && e.message.includes("fetch")) {
+        return { ok: false, error: t("auth.error.network") };
+      }
+      return { ok: false, error: t("auth.error.generic") + (e instanceof Error ? `: ${e.message}` : "") };
+    }
   }
 
   // ── Forgot password ──
@@ -244,7 +260,7 @@ export function AuthModal({
       });
       const json = await res.json();
       if (!res.ok) {
-        setError(json?.error || t("auth.error.generic"));
+        setError(json?.error || t("auth.error.generic") + (json?.debugCode ? ` (${json.debugCode})` : ""));
         return;
       }
       setForgotSent(true);
@@ -252,8 +268,12 @@ export function AuthModal({
         // Dev mode — show the reset link directly
         setSuccess(json.devLink);
       }
-    } catch {
-      setError(t("auth.error.generic"));
+    } catch (e) {
+      if (e instanceof TypeError && e.message.includes("fetch")) {
+        setError(t("auth.error.network"));
+      } else {
+        setError(t("auth.error.generic") + (e instanceof Error ? `: ${e.message}` : ""));
+      }
     } finally {
       setLoading(false);
     }
@@ -281,8 +301,12 @@ export function AuthModal({
         onAuthenticated();
         handleClose();
       }, 1500);
-    } catch {
-      setError(t("auth.error.generic"));
+    } catch (e) {
+      if (e instanceof TypeError && e.message.includes("fetch")) {
+        setError(t("auth.error.network"));
+      } else {
+        setError(t("auth.error.generic") + (e instanceof Error ? `: ${e.message}` : ""));
+      }
     } finally {
       setLoading(false);
     }
@@ -306,8 +330,12 @@ export function AuthModal({
       setSuccess(t("auth.emailVerified"));
       onAuthenticated();
       setTimeout(() => handleClose(), 1500);
-    } catch {
-      setError(t("auth.error.generic"));
+    } catch (e) {
+      if (e instanceof TypeError && e.message.includes("fetch")) {
+        setError(t("auth.error.network"));
+      } else {
+        setError(t("auth.error.generic") + (e instanceof Error ? `: ${e.message}` : ""));
+      }
     } finally {
       setLoading(false);
     }
