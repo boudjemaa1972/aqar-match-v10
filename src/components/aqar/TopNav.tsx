@@ -54,6 +54,7 @@ export function TopNav({ current, onNavigate, isLoggedIn = false, onRequireAuth 
 
   // Secondary items for the hamburger Sheet (mobile only)
   const secondaryItems = [
+    { label: "لوحة الإدارة", icon: Shield, href: "/admin" },
     { label: t("nav.blog"), icon: BookOpen, href: "/blog" },
     { label: t("nav.privacy"), icon: Shield, href: "/privacy" },
     { label: t("nav.help"), icon: HelpCircle, href: "#" },
