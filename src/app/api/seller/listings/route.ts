@@ -17,6 +17,7 @@ import {
 // ──────────────────────────────────────────────────────────────────
 
 export async function GET() {
+try {
   const user = await getOrCreateSession();
 
   const listings = await db.listing.findMany({
@@ -118,6 +119,9 @@ export async function GET() {
   );
 
   return NextResponse.json({ listings: out, hasListings: out.length > 0 });
+} catch (e) {
+  console.error("[GET /api/seller/listings] error:", e);
+  return NextResponse.json({ listings: [], hasListings: false, error: e instanceof Error ? e.message : "unknown" }, { status: 500 });
 }
 
 // ──────────────────────────────────────────────────────────────────
