@@ -334,7 +334,7 @@ export async function POST(req: Request) {
         contactEnc,
         photosEnc,
         sellerFee,
-        status: "UNMODERATED",
+        status: "ACTIVE",
       },
     });
 

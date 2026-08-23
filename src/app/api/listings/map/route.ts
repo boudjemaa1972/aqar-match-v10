@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
   try {
     // Build Prisma where clause
     const where: any = {
-      status: "ACTIVE",
+      status: { in: ["ACTIVE", "UNMODERATED"] },
       geoLocationEnc: { not: null },
     };
 
