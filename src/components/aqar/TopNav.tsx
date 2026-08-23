@@ -30,11 +30,11 @@ export type NavView = "home" | "publish" | "search" | "mapSearch" | "account" | 
 interface Props {
   current: NavView;
   onNavigate: (v: NavView) => void;
-  isVerified?: boolean;
+  isLoggedIn?: boolean;
   onRequireAuth?: () => void;
 }
 
-export function TopNav({ current, onNavigate, isVerified = false, onRequireAuth }: Props) {
+export function TopNav({ current, onNavigate, isLoggedIn = false, onRequireAuth }: Props) {
   const { t, lang, setLang, dir } = useI18n();
   const [open, setOpen] = useState(false);
 
@@ -103,27 +103,27 @@ export function TopNav({ current, onNavigate, isVerified = false, onRequireAuth 
           {/* Auth status pill — click to login if guest */}
           <button
             onClick={() => {
-              if (isVerified) {
+              if (isLoggedIn) {
                 onNavigate("account");
               } else if (onRequireAuth) {
                 onRequireAuth();
               }
             }}
             className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium min-h-[36px] transition ${
-              isVerified
+              isLoggedIn
                 ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                 : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/15"
             }`}
-            title={isVerified ? t("auth.user.verified") : t("auth.user.guest")}
+            title={isLoggedIn ? t("auth.user.verified") : t("auth.user.guest")}
           >
-            {isVerified ? <ShieldCheck className="w-3.5 h-3.5" /> : <LogIn className="w-3.5 h-3.5" />}
+            {isLoggedIn ? <ShieldCheck className="w-3.5 h-3.5" /> : <LogIn className="w-3.5 h-3.5" />}
             <span className="hidden lg:inline">
-              {isVerified ? t("auth.user.verified") : t("auth.btn.sendCode")}
+              {isLoggedIn ? t("auth.user.verified") : t("auth.btn.sendCode")}
             </span>
           </button>
 
           {/* Notification bell — visible only for verified users */}
-          <NotificationBell isVerified={isVerified} onNavigate={onNavigate} />
+          <NotificationBell isLoggedIn={isLoggedIn} onNavigate={onNavigate} />
 
           {/* Language switch — always visible */}
           <button

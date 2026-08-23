@@ -62,7 +62,7 @@ interface UseNotificationsResult {
 
 const POLL_INTERVAL_MS = 45_000; // 45 seconds
 
-export function useNotifications(isVerified: boolean): UseNotificationsResult {
+export function useNotifications(isLoggedIn: boolean): UseNotificationsResult {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -70,7 +70,7 @@ export function useNotifications(isVerified: boolean): UseNotificationsResult {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!isVerified) return;
+    if (!isLoggedIn) return;
     setLoading(true);
     setError(null);
     try {
@@ -93,7 +93,7 @@ export function useNotifications(isVerified: boolean): UseNotificationsResult {
     } finally {
       setLoading(false);
     }
-  }, [isVerified]);
+  }, [isLoggedIn]);
 
   const markAsRead = useCallback(async (id: string) => {
     // Optimistic update — flip the local state immediately
@@ -112,9 +112,9 @@ export function useNotifications(isVerified: boolean): UseNotificationsResult {
     }
   }, []);
 
-  // ── Mount + isVerified change: fetch once + start interval ──
+  // ── Mount + isLoggedIn change: fetch once + start interval ──
   useEffect(() => {
-    if (!isVerified) {
+    if (!isLoggedIn) {
       setNotifications([]);
       setUnreadCount(0);
       return;
@@ -136,7 +136,7 @@ export function useNotifications(isVerified: boolean): UseNotificationsResult {
       if (intervalRef.current) clearInterval(intervalRef.current);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [isVerified, refresh]);
+  }, [isLoggedIn, refresh]);
 
   return { notifications, unreadCount, loading, error, refresh, markAsRead };
 }

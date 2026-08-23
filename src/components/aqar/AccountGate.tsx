@@ -25,7 +25,11 @@ interface UserInfo {
   verified: boolean;
 }
 
-export function AccountGate() {
+interface AccountGateProps {
+  onAuthChanged?: () => void;
+}
+
+export function AccountGate({ onAuthChanged }: AccountGateProps) {
   const { t } = useI18n();
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,6 +89,7 @@ export function AccountGate() {
       await fetch("/api/auth/logout", { method: "POST" });
       setUser(null);
       setRefreshKey((k) => k + 1);
+      onAuthChanged?.();
     } catch {
       setLoggingOut(false);
     }
@@ -208,7 +213,7 @@ export function AccountGate() {
       <AuthModal
         open={authOpen}
         onClose={() => setAuthOpen(false)}
-        onAuthenticated={() => { setAuthOpen(false); setRefreshKey((k) => k + 1); }}
+        onAuthenticated={() => { setAuthOpen(false); setRefreshKey((k) => k + 1); onAuthChanged?.(); }}
         initialMode={authMode}
       />
     </>

@@ -63,31 +63,32 @@ export default function Home() {
     return "home";
   });
   const [authPending, setAuthPending] = useState<NavView | null>(null);
-  const [isVerified, setIsVerified] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // Check session status on mount
+  // Check session status on mount and when auth changes
   const refreshSession = useCallback(async () => {
     try {
       const res = await fetch("/api/auth/me", { cache: "no-store" });
       if (res.ok) {
         const json = await res.json();
-        setIsVerified(!!json?.user?.verified && !json?.user?.isGuest);
+        // User is "authenticated" if they exist and are not a guest
+        setIsLoggedIn(!!json?.user && !json?.user?.isGuest);
       } else {
-        setIsVerified(false);
+        setIsLoggedIn(false);
       }
     } catch {
-      setIsVerified(false);
+      setIsLoggedIn(false);
     }
   }, []);
 
   useEffect(() => { refreshSession(); }, [refreshSession]);
 
   function navigate(v: NavView) {
-    // Only "dashboard" requires pre-verification at the navigation level.
+    // Only "dashboard" requires login at the navigation level.
     // "publish" and "search" use INLINE PhoneAuthGate at their respective
     // contact-info steps (step 4 for publish, step 5 for search), so users
     // can browse criteria freely and only verify when ready to commit.
-    if (v === "dashboard" && !isVerified) {
+    if (v === "dashboard" && !isLoggedIn) {
       setAuthPending(v);
       return;
     }
@@ -100,7 +101,7 @@ export default function Home() {
   }
 
   function handleAuthSuccess() {
-    setIsVerified(true);
+    refreshSession();
     if (authPending) {
       const target = authPending;
       setAuthPending(null);
@@ -112,7 +113,7 @@ export default function Home() {
   return (
     <main className="min-h-screen flex flex-col bg-background">
       <PageMeta view={view} />
-      <TopNav current={view} onNavigate={navigate} isVerified={isVerified} onRequireAuth={() => setAuthPending(view)} />
+      <TopNav current={view} onNavigate={navigate} isLoggedIn={isLoggedIn} onRequireAuth={() => setAuthPending(view)} />
 
       <div className="flex-1 pb-14 md:pb-0">
         {view === "home" && (
@@ -161,7 +162,7 @@ export default function Home() {
           </Suspense>
         )}
 
-        {view === "account" && <AccountGate />}
+        {view === "account" && <AccountGate onAuthChanged={refreshSession} />}
 
         {view === "dashboard" && (
           <Suspense fallback={<ViewLoader />}>

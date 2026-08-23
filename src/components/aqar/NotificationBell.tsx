@@ -27,13 +27,13 @@ import { TYPE_LABELS, INTENT_LABELS } from "@/lib/schemas";
 import type { NavView } from "@/components/aqar/TopNav";
 
 interface Props {
-  isVerified: boolean;
+  isLoggedIn: boolean;
   onNavigate: (v: NavView) => void;
 }
 
-export function NotificationBell({ isVerified, onNavigate }: Props) {
+export function NotificationBell({ isLoggedIn, onNavigate }: Props) {
   const { t, dir } = useI18n();
-  const { notifications, unreadCount, markAsRead } = useNotifications(isVerified);
+  const { notifications, unreadCount, markAsRead } = useNotifications(isLoggedIn);
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -49,7 +49,7 @@ export function NotificationBell({ isVerified, onNavigate }: Props) {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [open]);
 
-  if (!isVerified) return null;
+  if (!isLoggedIn) return null;
 
   function handleNotificationClick(notifId: string, matchId: string | null) {
     markAsRead(notifId);
