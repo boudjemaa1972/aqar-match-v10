@@ -22,7 +22,7 @@ import {
   Search, RefreshCw, CheckCircle2, XCircle, Clock, Phone, MapPin,
   BedDouble, Bath, Maximize, Loader2, Sparkles, Building2, Inbox,
   TrendingUp, Wallet, AlertCircle, Handshake, Bell, Bookmark,
-  Star, ChevronLeft, ChevronRight, ArrowLeft, Eye,
+  Star, ChevronLeft, ChevronRight, ArrowLeft, Eye, LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -297,6 +297,18 @@ export function BuyerDashboard({ onSwitchToSeller, onStartSearch, onStartPublish
           <Button onClick={loadData} variant="outline" size="sm" className="gap-1.5">
             <RefreshCw className="w-4 h-4" />
             <span className="hidden sm:inline">{t("buyer.dashboard.refresh")}</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/5"
+            onClick={async () => {
+              await fetch("/api/auth/logout", { method: "POST" });
+              window.location.reload();
+            }}
+          >
+            <LogOut className="w-4 h-4" />
+            <span className="hidden sm:inline">خروج</span>
           </Button>
         </div>
       </div>

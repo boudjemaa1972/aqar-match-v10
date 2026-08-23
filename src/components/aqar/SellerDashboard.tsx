@@ -30,6 +30,7 @@ import {
   TrendingUp,
   Plus,
   Lock,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -273,6 +274,18 @@ export function SellerDashboard({ onSwitchToBuyer, onAddListing }: Props) {
           </Button>
           <Button variant="ghost" onClick={onSwitchToBuyer} size="sm" className="gap-1.5">
             عودة للمشتري
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/5"
+            onClick={async () => {
+              await fetch("/api/auth/logout", { method: "POST" });
+              window.location.reload();
+            }}
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            خروج
           </Button>
         </div>
       </div>
