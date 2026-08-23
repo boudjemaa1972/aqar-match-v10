@@ -1,15 +1,8 @@
 "use client";
 
 // ──────────────────────────────────────────────────────────────────
-//  AccountGate — placeholder for the future account/registration page.
-//
-//  Currently every visitor is a "guest" with a sessionToken cookie.
-//  This component explains why an account is needed and signals that
-//  the registration system is coming soon.
-//
-//  IMPORTANT: This does NOT break the existing guest session flow.
-//  The sessionToken in the httpOnly cookie continues to work and
-//  remains the technical basis for any future auth system.
+//  AccountGate — account page component.
+//  Shows login/signup for guests, account info + logout for logged-in users.
 // ──────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
@@ -36,6 +29,7 @@ export function AccountGate({ onAuthChanged }: AccountGateProps) {
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -52,6 +46,18 @@ export function AccountGate({ onAuthChanged }: AccountGateProps) {
   function openAuth(mode: AuthMode) {
     setAuthMode(mode);
     setAuthOpen(true);
+  }
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      setUser(null);
+      setRefreshKey((k) => k + 1);
+      onAuthChanged?.();
+    } catch {
+      setLoggingOut(false);
+    }
   }
 
   const benefits = [
@@ -72,6 +78,7 @@ export function AccountGate({ onAuthChanged }: AccountGateProps) {
     },
   ];
 
+  // ── Loading ──
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -81,20 +88,6 @@ export function AccountGate({ onAuthChanged }: AccountGateProps) {
   }
 
   // ── Logged-in user → show account info ──
-  const [loggingOut, setLoggingOut] = useState(false);
-
-  async function handleLogout() {
-    setLoggingOut(true);
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-      setUser(null);
-      setRefreshKey((k) => k + 1);
-      onAuthChanged?.();
-    } catch {
-      setLoggingOut(false);
-    }
-  }
-
   if (user) {
     return (
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
