@@ -31,16 +31,19 @@ export function AccountGate() {
   const [loading, setLoading] = useState(true);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    setLoading(true);
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.user) setUser(d.user);
+        else setUser(null);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, []);
+      .catch(() => { setUser(null); setLoading(false); });
+  }, [refreshKey]);
 
   function openAuth(mode: AuthMode) {
     setAuthMode(mode);
@@ -81,7 +84,7 @@ export function AccountGate() {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
       setUser(null);
-      window.location.reload();
+      setRefreshKey((k) => k + 1);
     } catch {
       setLoggingOut(false);
     }
@@ -205,7 +208,7 @@ export function AccountGate() {
       <AuthModal
         open={authOpen}
         onClose={() => setAuthOpen(false)}
-        onAuthenticated={() => { setAuthOpen(false); setLoading(true); /* re-fetch user */ }}
+        onAuthenticated={() => { setAuthOpen(false); setRefreshKey((k) => k + 1); }}
         initialMode={authMode}
       />
     </>
