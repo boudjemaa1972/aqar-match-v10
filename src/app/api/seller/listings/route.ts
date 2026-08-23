@@ -51,45 +51,73 @@ export async function GET() {
 
   const out = await Promise.all(
     listings.map(async (l) => {
-      const location = await decryptField(l.locationEnc);
-      // Seller sees their OWN precise GPS location at any time — same
-      // rule as secretMinPrice (owner-only, no restrictions).
-      const geoLocation = l.geoLocationEnc
-        ? await decryptJSON<{ lat: number; lng: number; accuracy?: number | null }>(l.geoLocationEnc)
-        : null;
-      const features = (() => {
-        try { return JSON.parse(l.features) || []; } catch { return []; }
-      })();
-      const s = stats.get(l.id) || { total: 0, pending: 0, accepted: 0, rejected: 0 };
-      return {
-        id: l.id,
-        intent: l.intent,
-        type: l.type,
-        city: l.city,
-        commune: l.commune,
-        district: l.district,
-        askingPrice: l.askingPrice,
-        areaSqm: l.areaSqm,
-        bedrooms: l.bedrooms,
-        bathrooms: l.bathrooms,
-        floor: l.floor,
-        facades: l.facades,
-        legalStatus: l.legalStatus,
-        urbanPermitStatus: l.urbanPermitStatus,
-        offerTitle: l.offerTitle,
-        description: l.description,
-        features,
-        status: l.status,
-        sellerFee: l.sellerFee,
-        location,
-        geoLocation, // owner sees their own geo at any time
-        createdAt: l.createdAt,
-        stats: s,
-      };
+      try {
+        const location = await decryptField(l.locationEnc);
+        const geoLocation = l.geoLocationEnc
+          ? await decryptJSON<{ lat: number; lng: number; accuracy?: number | null }>(l.geoLocationEnc)
+          : null;
+        const features = (() => {
+          try { return JSON.parse(l.features) || []; } catch { return []; }
+        })();
+        const s = stats.get(l.id) || { total: 0, pending: 0, accepted: 0, rejected: 0 };
+        return {
+          id: l.id,
+          intent: l.intent,
+          type: l.type,
+          city: l.city,
+          commune: l.commune,
+          district: l.district,
+          askingPrice: l.askingPrice,
+          areaSqm: l.areaSqm,
+          bedrooms: l.bedrooms,
+          bathrooms: l.bathrooms,
+          floor: l.floor,
+          facades: l.facades,
+          legalStatus: l.legalStatus,
+          urbanPermitStatus: l.urbanPermitStatus,
+          offerTitle: l.offerTitle,
+          description: l.description,
+          features,
+          status: l.status,
+          sellerFee: l.sellerFee,
+          location: location || "",
+          geoLocation,
+          createdAt: l.createdAt,
+          stats: s,
+        };
+      } catch (e) {
+        // If decrypt fails, return listing with raw data
+        const s = stats.get(l.id) || { total: 0, pending: 0, accepted: 0, rejected: 0 };
+        return {
+          id: l.id,
+          intent: l.intent,
+          type: l.type,
+          city: l.city,
+          commune: l.commune,
+          district: l.district,
+          askingPrice: l.askingPrice,
+          areaSqm: l.areaSqm,
+          bedrooms: l.bedrooms,
+          bathrooms: l.bathrooms,
+          floor: l.floor,
+          facades: l.facades,
+          legalStatus: l.legalStatus,
+          urbanPermitStatus: l.urbanPermitStatus,
+          offerTitle: l.offerTitle,
+          description: l.description,
+          features: [],
+          status: l.status,
+          sellerFee: l.sellerFee,
+          location: l.city,
+          geoLocation: null,
+          createdAt: l.createdAt,
+          stats: s,
+        };
+      }
     }),
   );
 
-  return NextResponse.json({ listings: out, hasListings: true });
+  return NextResponse.json({ listings: out, hasListings: out.length > 0 });
 }
 
 // ──────────────────────────────────────────────────────────────────
