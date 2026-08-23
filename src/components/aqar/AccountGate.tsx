@@ -13,7 +13,7 @@
 // ──────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
-import { User, Lock, Bell, ShieldCheck, Sparkles, Loader2 } from "lucide-react";
+import { User, Lock, Bell, ShieldCheck, Sparkles, Loader2, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { AuthModal, type AuthMode } from "./auth/AuthModal";
@@ -74,6 +74,19 @@ export function AccountGate() {
   }
 
   // ── Logged-in user → show account info ──
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      setUser(null);
+      window.location.reload();
+    } catch {
+      setLoggingOut(false);
+    }
+  }
+
   if (user) {
     return (
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
@@ -115,6 +128,23 @@ export function AccountGate() {
               </div>
             );
           })}
+        </div>
+
+        {/* ── Logout button ── */}
+        <div className="text-center">
+          <Button
+            variant="outline"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
+          >
+            {loggingOut ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <LogOut className="w-4 h-4" />
+            )}
+            تسجيل الخروج
+          </Button>
         </div>
       </div>
     );
