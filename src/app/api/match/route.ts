@@ -135,8 +135,9 @@ export async function POST(req: Request) {
       .update(`${input.intent}|${input.type}|${input.city}|${input.commune || ""}|${input.district || ""}`)
       .digest("hex");
     const since = new Date(Date.now() - RATE_LIMIT_HOURS * 60 * 60 * 1000);
+    // Only count stage-2 searches (FULFILLED), not stage-1 existence checks (OPEN)
     const recentCount = await db.matchRequest.count({
-      where: { userId: user.id, criteriaHash, createdAt: { gte: since } },
+      where: { userId: user.id, criteriaHash, status: "FULFILLED", createdAt: { gte: since } },
     });
     if (recentCount >= RATE_LIMIT_MAX) {
       return NextResponse.json(
