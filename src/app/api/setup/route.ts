@@ -187,8 +187,6 @@ const SQL_STATEMENTS = [
     "meetingAgreementDeadlineAt" TIMESTAMP(3),
     "meetingAgreementStatus" "MeetingAgreementStatus",
     "agreedMeetingDate" TIMESTAMP(3), "agreementConfirmedAt" TIMESTAMP(3),
-    "buyerMeetingConsent" "BuyerMeetingConsent",
-    "sellerMeetingConsent" "SellerMeetingConsent",
     "status" "MatchStatus" NOT NULL DEFAULT 'PROPOSED',
     "buyerConsent" BOOLEAN NOT NULL DEFAULT false,
     "dealClosedAt" TIMESTAMP(3), "finalDealValue" INTEGER,
