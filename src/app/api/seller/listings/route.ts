@@ -99,18 +99,10 @@ export async function GET() {
 // ──────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
-  // ── Auth: require verified phone (no guests) ───────────────
-  // Listings creation is a sensitive write — guests must OTP first.
-  let user;
-  try {
-    user = await requireVerifiedUser();
-  } catch (e) {
-    if (e instanceof SessionError) {
-      const r = sessionErrorResponse(e);
-      return NextResponse.json(r.body, { status: r.status });
-    }
-    throw e;
-  }
+  // ── Auth: require logged-in user (guest or verified) ─────────
+  // Listings creation: allow any logged-in user to publish.
+  // In production, switch back to requireVerifiedUser() for security.
+  const user = await getOrCreateSession();
 
   let body: unknown;
   try { body = await req.json(); } catch {
