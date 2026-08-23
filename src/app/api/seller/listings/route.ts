@@ -123,6 +123,7 @@ try {
   console.error("[GET /api/seller/listings] error:", e);
   return NextResponse.json({ listings: [], hasListings: false, error: e instanceof Error ? e.message : "unknown" }, { status: 500 });
 }
+}
 
 // ──────────────────────────────────────────────────────────────────
 //  POST /api/seller/listings — create a new listing.
