@@ -42,6 +42,17 @@ import {
   LineChart,
   Download,
   Settings,
+  Globe,
+  Bell,
+  MessageSquare,
+  Clock,
+  Target,
+  Award,
+  UserPlus,
+  Sliders,
+  GitMerge,
+  Handshake,
+  FileCheck,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { PromoBanner } from "./PromoBanner";
@@ -452,6 +463,18 @@ export function HomePage({ onStartSeller, onStartBuyer, onNavigate }: Props) {
           </div>
         </div>
       </section>
+
+      {/* ═══════════ الميزات الأساسية ═══════════ */}
+      <FeaturesSection />
+
+      {/* ═══════════ فوائد المستخدمين ═══════════ */}
+      <BenefitsSection />
+
+      {/* ═══════════ الخطوات العملية ═══════════ */}
+      <BusinessStepsSection />
+
+      {/* ═══════════ المكونات الرئيسية ═══════════ */}
+      <ComponentsSection />
 
       {/* ───────── Fee Calculator ───────── */}
       <FeeCalculator />
@@ -1055,5 +1078,235 @@ function StatBox({ value, label }: { value: number; label: string }) {
       </div>
       <div className="text-[10px] sm:text-xs lg:text-sm opacity-70 leading-tight font-medium tracking-wide uppercase">{label}</div>
     </motion.div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  FeaturesSection — الميزات الأساسية (from infographic)
+// ══════════════════════════════════════════════════════════════════
+function FeaturesSection() {
+  const { t } = useI18n();
+  const features = [
+    { icon: Sparkles, title: t("features.smartMatch"), desc: t("features.smartMatch.desc"), color: "bg-primary/10 text-primary" },
+    { icon: Lock, title: t("features.privacy"), desc: t("features.privacy.desc"), color: "bg-emerald-500/10 text-emerald-600" },
+    { icon: Globe, title: t("features.geoSearch"), desc: t("features.geoSearch.desc"), color: "bg-blue-500/10 text-blue-600" },
+    { icon: Bell, title: t("features.smartAlerts"), desc: t("features.smartAlerts.desc"), color: "bg-amber-500/10 text-amber-600" },
+    { icon: MessageSquare, title: t("features.secureChat"), desc: t("features.secureChat.desc"), color: "bg-violet-500/10 text-violet-600" },
+  ];
+
+  return (
+    <section className="py-16 sm:py-20 lg:py-28 bg-background">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-10 sm:mb-12"
+        >
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold mb-3">
+            <Sparkles className="w-4 h-4" />
+            {t("features.badge")}
+          </div>
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-foreground mb-2">
+            {t("features.title")}
+          </h2>
+        </motion.div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          {features.map((f, i) => {
+            const Icon = f.icon;
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.1 + i * 0.08 }}
+                className="rounded-2xl border border-border bg-card p-5 sm:p-6 hover:shadow-md transition-all group"
+              >
+                <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4 ${f.color} group-hover:scale-110 transition-transform`}>
+                  <Icon className="w-6 h-6" />
+                </div>
+                <h3 className="font-bold text-foreground text-base mb-2">{f.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  BenefitsSection — فوائد المستخدمين (from infographic)
+// ══════════════════════════════════════════════════════════════════
+function BenefitsSection() {
+  const { t } = useI18n();
+  const benefits = [
+    { icon: Clock, title: t("benefits.saveTime"), desc: t("benefits.saveTime.desc"), color: "text-primary" },
+    { icon: Zap, title: t("benefits.speed"), desc: t("benefits.speed.desc"), color: "text-amber-500" },
+    { icon: Target, title: t("benefits.accuracy"), desc: t("benefits.accuracy.desc"), color: "text-emerald-500" },
+    { icon: Award, title: t("benefits.exclusive"), desc: t("benefits.exclusive.desc"), color: "text-violet-500" },
+  ];
+
+  return (
+    <section className="py-16 sm:py-20 lg:py-28 bg-secondary/20">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-10 sm:mb-12"
+        >
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gold/10 text-gold text-xs font-bold mb-3">
+            <TrendingUp className="w-4 h-4" />
+            {t("benefits.badge")}
+          </div>
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-foreground mb-2">
+            {t("benefits.title")}
+          </h2>
+        </motion.div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
+          {benefits.map((b, i) => {
+            const Icon = b.icon;
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.1 + i * 0.08 }}
+                className="flex items-start gap-4 rounded-2xl border border-border bg-card p-5 sm:p-6 hover:shadow-md transition-all"
+              >
+                <div className="flex-shrink-0 mt-1">
+                  <Icon className={`w-8 h-8 ${b.color}`} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-foreground text-base mb-1">{b.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{b.desc}</p>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  BusinessStepsSection — الخطوات العملية (from infographic)
+// ══════════════════════════════════════════════════════════════════
+function BusinessStepsSection() {
+  const { t } = useI18n();
+  const steps = [
+    { num: "1", icon: UserPlus, title: t("steps.step1"), desc: t("steps.step1.desc") },
+    { num: "2", icon: Sliders, title: t("steps.step2"), desc: t("steps.step2.desc") },
+    { num: "3", icon: GitMerge, title: t("steps.step3"), desc: t("steps.step3.desc") },
+    { num: "4", icon: Handshake, title: t("steps.step4"), desc: t("steps.step4.desc") },
+    { num: "5", icon: FileCheck, title: t("steps.step5"), desc: t("steps.step5.desc") },
+  ];
+
+  return (
+    <section className="py-16 sm:py-20 lg:py-28 bg-background">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-10 sm:mb-12"
+        >
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold mb-3">
+            <CheckCircle2 className="w-4 h-4" />
+            {t("steps.badge")}
+          </div>
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-foreground mb-2">
+            {t("steps.title")}
+          </h2>
+        </motion.div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5">
+          {steps.map((s, i) => {
+            const Icon = s.icon;
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.1 + i * 0.08 }}
+                className="relative rounded-2xl border border-border bg-card p-4 sm:p-5 text-center hover:shadow-md transition-all group"
+              >
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shadow-md">
+                  {s.num}
+                </div>
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 text-primary mb-3 group-hover:scale-110 transition-transform mt-2">
+                  <Icon className="w-6 h-6" />
+                </div>
+                <h3 className="font-bold text-foreground text-sm mb-1">{s.title}</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">{s.desc}</p>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  ComponentsSection — المكونات الرئيسية (from infographic)
+// ══════════════════════════════════════════════════════════════════
+function ComponentsSection() {
+  const { t } = useI18n();
+  const components = [
+    { icon: Users, title: t("components.users"), desc: t("components.users.desc"), color: "bg-blue-500/10 text-blue-600" },
+    { icon: Layers, title: t("components.app"), desc: t("components.app.desc"), color: "bg-emerald-500/10 text-emerald-600" },
+    { icon: Cpu, title: t("components.engine"), desc: t("components.engine.desc"), color: "bg-violet-500/10 text-violet-600" },
+  ];
+
+  return (
+    <section className="py-16 sm:py-20 lg:py-28 bg-secondary/30">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-10 sm:mb-12"
+        >
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold mb-3">
+            <Database className="w-4 h-4" />
+            {t("components.badge")}
+          </div>
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-foreground mb-2">
+            {t("components.title")}
+          </h2>
+        </motion.div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 sm:gap-6">
+          {components.map((c, i) => {
+            const Icon = c.icon;
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.1 + i * 0.1 }}
+                className="rounded-2xl border border-border bg-card p-6 sm:p-8 text-center hover:shadow-md transition-all group"
+              >
+                <div className={`inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 ${c.color} group-hover:scale-110 transition-transform`}>
+                  <Icon className="w-8 h-8" />
+                </div>
+                <h3 className="font-bold text-foreground text-lg mb-2">{c.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{c.desc}</p>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
   );
 }
