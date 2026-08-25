@@ -49,19 +49,14 @@ const RATE_LIMIT_MAX = 3;
 const SELLER_DEADLINE_HOURS = 48;
 
 export async function POST(req: Request) {
-  // ── Auth: require verified phone (no guests) ───────────────
-  // Matching is a sensitive action — guests must OTP-verify first.
-  // This prevents spam match requests and protects sellers from
-  // unverified buyers harvesting contact data.
-  let user;
-  try {
-    user = await requireVerifiedUser();
-  } catch (e) {
-    if (e instanceof SessionError) {
-      const r = sessionErrorResponse(e);
-      return NextResponse.json(r.body, { status: r.status });
-    }
-    throw e;
+  // ── Auth: require ANY logged-in user for Stage 1 ──────────────
+  // Stage 1 (existence check) only needs a logged-in user — no verification required.
+  // Stage 2 (full match with contact) requires verified identity (phone OR email).
+  const { getSession } = await import("@/lib/session");
+  let user = await getSession();
+  if (!user || user.isGuest) {
+    // For Stage 1, allow guests/unverified to check existence
+    // but require login for Stage 2
   }
 
   let body: any;
@@ -71,6 +66,10 @@ export async function POST(req: Request) {
 
   // ════════════ STAGE 1: existence check ════════════
   if (body?.stage === 1) {
+    // Stage 1 doesn't require verification — just need a logged-in user
+    if (!user) {
+      return NextResponse.json({ error: "يجب تسجيل الدخول للمتابعة" }, { status: 401 });
+    }
     const parsed = matchStage1Schema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
@@ -120,6 +119,21 @@ export async function POST(req: Request) {
 
   // ════════════ STAGE 2: full match ════════════
   if (body?.stage === 2) {
+    // Stage 2 requires verified identity — this is a sensitive action
+    // that exposes seller contact data after payment.
+    if (!user || user.isGuest) {
+      return NextResponse.json({ error: "يجب تسجيل الدخول للمتابعة" }, { status: 401 });
+    }
+    const { requireVerifiedUser: requireVerified } = await import("@/lib/session");
+    try {
+      await requireVerified();
+    } catch (e) {
+      if (e instanceof SessionError) {
+        const r = sessionErrorResponse(e);
+        return NextResponse.json(r.body, { status: r.status });
+      }
+      throw e;
+    }
     const parsed = matchStage2Schema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(

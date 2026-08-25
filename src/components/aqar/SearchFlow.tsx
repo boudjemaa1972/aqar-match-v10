@@ -37,7 +37,7 @@ import { SearchVerifyGate } from "@/components/aqar/SearchVerifyGate";
 import { LocationPicker, type PickedLocation } from "@/components/aqar/LocationPicker";
 import { LeafletMapPicker } from "@/components/aqar/LeafletMapPicker";
 import {
-  WILAYAS, COMMUNES_BY_WILAYA,
+  COMMUNES_BY_WILAYA,
   normalizeWilaya,
   getAskingPriceFloor,
   RESERVE_PRICE_FLOOR_SEASONAL_PER_NIGHT,
@@ -917,84 +917,30 @@ export function SearchFlow({ onBackHome, onGoToDashboard }: Props) {
           {step === 3 && (
             <div className="space-y-5 max-w-xl mx-auto">
               <h3 className="text-lg font-semibold text-foreground text-center">{t("search.locationQuestion")}</h3>
-              <div>
-                <Label className="text-xs mb-1.5 block">{t("publish.wilaya")}</Label>
-                <Select value={city} onValueChange={(v) => { setCity(v); setCommune(""); }}>
-                  <SelectTrigger className="h-12"><SelectValue placeholder={t("publish.chooseWilaya")} /></SelectTrigger>
-                  <SelectContent className="max-h-72">{WILAYAS.map((w) => <SelectItem key={w} value={w}>{w}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs mb-1.5 block">{t("publish.commune")} <span className="text-muted-foreground font-normal">(اختياري)</span></Label>
-                <Select value={commune} onValueChange={setCommune} disabled={!city}>
-                  <SelectTrigger className="h-12"><SelectValue placeholder={t("publish.chooseCommuneFirst")} /></SelectTrigger>
-                  <SelectContent className="max-h-72">{communes.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs mb-1.5 block">{t("publish.neighbourhood")} <span className="text-muted-foreground font-normal">(اختياري)</span></Label>
-                <Input value={district} onChange={(e) => setDistrict(e.target.value)} placeholder={t("publish.neighbourhoodPlaceholder")} className="h-12" />
-              </div>
 
-              {/* ── Optional: pick a precise reference point on the map ──
-                  This is OPTIONAL — the buyer can skip it and rely on the
-                  administrative fields above. If used, it enables the
-                  geoProximity scoring layer (15 pts) for properties near
-                  this reference point.
-
-                  SECURITY: the buyer's coordinates are encrypted server-side
-                  and used ONLY for matching — NEVER shown to any seller.
-
-                  NOTE: only shown when NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is
-                  configured. Otherwise, the manual dropdowns above are
-                  sufficient — we DON'T show a broken map or a confusing
-                  "fallback" message. */}
-              <div className="pt-3 border-t">
-                  <p className="text-xs text-muted-foreground mb-2">{hasMapsApiKey ? t("locationPicker.mapHint") : "انقر على الخريطة لتحديد نقطة مرجعية للبحث"}</p>
-                  {hasMapsApiKey ? (
-                    <LocationPicker
-                      initialWilaya={city}
-                      initialCommune={commune}
-                      initialDistrict={district}
-                      onLocationChange={(loc: PickedLocation | null) => {
-                        if (!loc) {
-                          setSearchLat(null);
-                          setSearchLng(null);
-                          return;
-                        }
-                        setSearchLat(loc.lat);
-                        setSearchLng(loc.lng);
-                        if (loc.wilaya) {
-                          const normalized = normalizeWilaya(loc.wilaya);
-                          if (normalized) setCity(normalized);
-                        }
-                        if (loc.commune) setCommune(loc.commune);
-                        if (loc.district || loc.districtNotFound) setDistrict(loc.district);
-                      }}
-                    />
-                  ) : (
-                    <LeafletMapPicker
-                      initialWilaya={city}
-                      initialCommune={commune}
-                      initialDistrict={district}
-                      onLocationChange={(loc: PickedLocation | null) => {
-                        if (!loc) {
-                          setSearchLat(null);
-                          setSearchLng(null);
-                          return;
-                        }
-                        setSearchLat(loc.lat);
-                        setSearchLng(loc.lng);
-                        if (loc.wilaya) {
-                          const normalized = normalizeWilaya(loc.wilaya);
-                          if (normalized) setCity(normalized);
-                        }
-                        if (loc.commune) setCommune(loc.commune);
-                        if (loc.district || loc.districtNotFound) setDistrict(loc.district);
-                      }}
-                    />
-                  )}
-                </div>
+              {/* Location picker — handles wilaya/commune/district + map.
+                  LeafletMapPicker has its own dropdowns + map, so we don't
+                  render separate manual dropdowns above it. */}
+              <LeafletMapPicker
+                initialWilaya={city}
+                initialCommune={commune}
+                initialDistrict={district}
+                onLocationChange={(loc: PickedLocation | null) => {
+                  if (!loc) {
+                    setSearchLat(null);
+                    setSearchLng(null);
+                    return;
+                  }
+                  setSearchLat(loc.lat);
+                  setSearchLng(loc.lng);
+                  if (loc.wilaya) {
+                    const normalized = normalizeWilaya(loc.wilaya);
+                    if (normalized) setCity(normalized);
+                  }
+                  if (loc.commune) setCommune(loc.commune);
+                  if (loc.district || loc.districtNotFound) setDistrict(loc.district);
+                }}
+              />
             </div>
           )}
 
