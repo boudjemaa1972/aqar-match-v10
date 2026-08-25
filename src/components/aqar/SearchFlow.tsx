@@ -33,7 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { InlineMap } from "@/components/aqar/InlineMap";
 import { MissingFieldsHelper } from "@/components/aqar/MissingFieldsHelper";
-import { PhoneAuthGate } from "@/components/aqar/PhoneAuthGate";
+import { SearchVerifyGate } from "@/components/aqar/SearchVerifyGate";
 import { LocationPicker, type PickedLocation } from "@/components/aqar/LocationPicker";
 import { LeafletMapPicker } from "@/components/aqar/LeafletMapPicker";
 import {
@@ -1062,15 +1062,12 @@ export function SearchFlow({ onBackHome, onGoToDashboard }: Props) {
                 <p className="text-xs text-muted-foreground">{t("search.contactNote")}</p>
               </div>
 
-              {/* ── Phone Auth Gate (mandatory) ──
-                  Replaces the old name/phone form + "accounts coming soon" placeholder.
-                  If user is already verified, shows a green badge + auto-fills name/phone.
-                  If not, shows the phone+OTP form inline.
+              {/* ── Verification Gate (phone OR email) ──
+                  User chooses phone OTP or email OTP to verify.
+                  If already verified (any method), shows green badge.
               */}
-              <PhoneAuthGate
-                explanation={t("phoneGate.searchExplanation")}
+              <SearchVerifyGate
                 onVerified={(u) => {
-                  // Auto-fill name/phone from the verified session
                   if (u.name) setFullName(u.name);
                   if (u.phone) setPhone(u.phone);
                   setPhoneVerified(true);

@@ -100,7 +100,11 @@ export function PhoneAuthGate({ onVerified, explanation, compact = false }: Prop
       const res = await fetch("/api/auth/me", { cache: "no-store" });
       if (res.ok) {
         const json = await res.json();
-        if (json?.user?.verified && !json?.user?.isGuest) {
+        // Accept ANY form of verification: legacy `verified`, `emailVerified`, or `phoneVerified`
+        const isVerified = !json?.user?.isGuest && (
+          json?.user?.verified || json?.user?.emailVerified || json?.user?.phoneVerified
+        );
+        if (isVerified) {
           setStep("verified");
           onVerified({ name: json.user.name, phone: json.user.phone });
           return;
